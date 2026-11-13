@@ -8,7 +8,7 @@
 - [x] `conditional-update` strategy (mutation check: without id order the invariant run fails with 724 conflict retries)
 - [x] V2 migration with `accounts.version`; `optimistic` strategy (updates flushed in id order via `hibernate.order_updates`)
 - [x] `serializable` strategy (`SerializableIsolationTest` proves the level; the invariant test alone would pass at read committed thanks to `@Version`)
-- [ ] Spike: jmeter-java-dsl on Java 25 (at most one hour; Gatling fallback per ADR 0011)
+- [x] Spike: jmeter-java-dsl on Java 25 works (result in ADR 0011); app must run in its own JVM per cell
 - [ ] Load plan and one local cell under `-Pbenchmark`, metrics collected
 - [ ] Benchmark workflow (manual, 24 cells x 5, shuffled) and results aggregation
 - [ ] One full published run, results committed
