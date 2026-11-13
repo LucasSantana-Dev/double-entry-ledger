@@ -81,10 +81,30 @@ class ConcurrentTransfersInvariantTest {
                 throws InterruptedException {
             assertThat(strategy).isInstanceOf(PessimisticStrategy.class);
             verify(service, accounts, jdbc, "pessimistic");
-            // Ordered row locks never deadlock, so nothing was retried. A retry here would mean a
-            // deadlock that the bounded retry hid.
-            assertThat(meters.counter("ledger.transfer.conflict.retries").count()).isZero();
+            assertNoRetries(meters);
         }
+    }
+
+    @Nested
+    @TestPropertySource(properties = "ledger.concurrency.strategy=conditional-update")
+    class ConditionalUpdate {
+
+        @Test
+        void ledgerStaysConsistent(@Autowired TransferService service, @Autowired AccountRepository accounts,
+                @Autowired JdbcClient jdbc, @Autowired ConcurrencyStrategy strategy, @Autowired MeterRegistry meters)
+                throws InterruptedException {
+            assertThat(strategy).isInstanceOf(ConditionalUpdateStrategy.class);
+            verify(service, accounts, jdbc, "conditional-update");
+            assertNoRetries(meters);
+        }
+    }
+
+    /**
+     * For the strategies that write in id order and never abort on conflict: a retry would mean a
+     * deadlock that the bounded retry hid, so there must be none.
+     */
+    private static void assertNoRetries(MeterRegistry meters) {
+        assertThat(meters.counter("ledger.transfer.conflict.retries").count()).as("conflict retries").isZero();
     }
 
     // Set by verify() from the nested class's context, never from the enclosing class's.
