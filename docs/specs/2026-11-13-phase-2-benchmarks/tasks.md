@@ -9,7 +9,7 @@
 - [x] V2 migration with `accounts.version`; `optimistic` strategy (updates flushed in id order via `hibernate.order_updates`)
 - [x] `serializable` strategy (`SerializableIsolationTest` proves the level; the invariant test alone would pass at read committed thanks to `@Version`)
 - [x] Spike: jmeter-java-dsl on Java 25 works (result in ADR 0011); app must run in its own JVM per cell
-- [ ] Load plan and one local cell under `-Pbenchmark`, metrics collected
+- [x] Load plan under `-Pbenchmark` (`LedgerBenchmark`, ADR 0014): child JVM and fresh PostgreSQL per cell, metrics and ledger check per cell; smoke-run locally on 3 cells
 - [ ] Benchmark workflow (manual, 24 cells x 5, shuffled) and results aggregation
 - [ ] One full published run, results committed
 - [ ] README results and limits; ADR 0007 points to them

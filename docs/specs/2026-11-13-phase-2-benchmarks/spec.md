@@ -24,9 +24,10 @@ Put numbers on the cost that ADR 0007 accepted: compare four ways of keeping bal
 5. Scenario matrix (ADR 0012), 1,000 accounts, HikariCP pool 10, 30 s warm-up, 60 s measured per cell:
    - Strategy grid: 4 strategies x hot account share 0%, 30%, 90% at 256 users, virtual threads. 12 cells.
    - Thread grid: `pessimistic` x 0%, 30%, 90% x 64 and 1,024 users x `spring.threads.virtual.enabled` true and false. 12 cells.
-6. Metrics per cell (ADR 0012): created transfers per second; latency p50, p95, p99, max; server retries, 503 and 409 counts; deadlocks and serialization failures from `pg_stat_database` deltas; peak live threads, used heap, process CPU from Actuator.
-7. A manual GitHub Actions workflow (ADR 0013) runs the 24 cells 5 times in shuffled order in one job and publishes a results file with median and 95% bootstrap confidence interval per cell, plus run id, date and CPU model.
-8. README results section with the numbers from one published run and the stated limits.
+6. Metrics per cell (ADR 0012): created transfers per second; latency p50, p95, p99, max; server retries (every conflict abort, serialization failures included), 503 and 409 counts; deadlocks from `pg_stat_database` deltas; peak live platform threads, used heap, process CPU from Actuator.
+7. Process layout (ADR 0014): the benchmark JVM runs JMeter and starts the packaged application as a child JVM per cell, on a fresh PostgreSQL container per cell seeded with 1,000 accounts; each cell ends with a ledger check.
+8. A manual GitHub Actions workflow (ADR 0013) runs the 24 cells 5 times in shuffled order in one job and publishes a results file with median and 95% bootstrap confidence interval per cell, plus run id, date and CPU model.
+9. README results section with the numbers from one published run and the stated limits.
 
 Out of scope: choosing a production strategy for later phases (a follow-up ADR may, from the results), HikariCP pool sweeps, open-model load, other databases, horizontal scaling.
 
@@ -50,10 +51,11 @@ The seven invariants of the phase 1 spec, unchanged, for every strategy.
 | 0011 | JMeter through jmeter-java-dsl (falls back to Gatling if it does not run on Java 25) |
 | 0012 | Two grids, 24 cells; throughput, latency, conflicts, JVM resources |
 | 0013 | Published numbers from GitHub Actions, 5 shuffled repetitions in one job |
+| 0014 | Application as a child JVM per cell, fresh PostgreSQL per cell |
 
 ## Done when
 
 - `./mvnw verify` passes with the invariant test green for all four strategies.
-- `./mvnw -Pbenchmark ...` runs one cell locally and writes its metrics.
+- `./mvnw -Pbenchmark verify` runs the cells locally and writes their metrics.
 - The benchmark workflow completed one full run, and its results file is committed.
 - README reports the results and their limits; ADR 0007 points to the results.
