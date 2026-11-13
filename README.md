@@ -1,5 +1,7 @@
 # double-entry-ledger
 
+[![CI](https://github.com/LucasSantana-Dev/double-entry-ledger/actions/workflows/ci.yml/badge.svg)](https://github.com/LucasSantana-Dev/double-entry-ledger/actions/workflows/ci.yml)
+
 A money transfer service whose central guarantee is that money is never created, lost or duplicated, even with thousands of concurrent requests and clients retrying. The guarantee is proven by a test that hammers a real PostgreSQL and then audits the books, not by a claim in this README.
 
 Java 25 · Spring Boot 4.1 · Spring Data JPA · PostgreSQL 18 · Flyway · Testcontainers · virtual threads
