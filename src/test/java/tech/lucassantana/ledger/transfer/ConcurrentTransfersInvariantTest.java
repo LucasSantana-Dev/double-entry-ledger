@@ -17,10 +17,12 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.IntStream;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.test.context.TestPropertySource;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import tech.lucassantana.ledger.TestcontainersConfiguration;
 import tech.lucassantana.ledger.account.Account;
@@ -34,6 +36,9 @@ import tech.lucassantana.ledger.money.Money;
  * with a hot account, transfers in both directions and duplicated submissions racing the
  * original, then checks every invariant of the spec in the database and against a client-side
  * model of what should have happened.
+ *
+ * <p>Runs once per concurrency strategy (ADR 0010), each in its own application context and
+ * database, with the same assertions: the invariants are the contract every strategy must meet.
  *
  * <p>Seeded and sized by system properties, so any failure reproduces:
  * {@code ./mvnw test -Dtest=ConcurrentTransfersInvariantTest -Dledger.invariant.operations=20000 -Dledger.invariant.seed=7}
@@ -64,17 +69,29 @@ class ConcurrentTransfersInvariantTest {
     private record StoredTransfer(UUID id, UUID from, UUID to, long cents) {
     }
 
-    @Autowired
-    TransferService service;
+    /** One per strategy. {@code @TestPropertySource} gives each its own context, so its own database. */
+    @Nested
+    @TestPropertySource(properties = "ledger.concurrency.strategy=pessimistic")
+    class Pessimistic {
 
-    @Autowired
-    AccountRepository accounts;
+        @Test
+        void ledgerStaysConsistent(@Autowired TransferService service, @Autowired AccountRepository accounts,
+                @Autowired JdbcClient jdbc, @Autowired ConcurrencyStrategy strategy) throws InterruptedException {
+            assertThat(strategy).isInstanceOf(PessimisticStrategy.class);
+            verify(service, accounts, jdbc, "pessimistic");
+        }
+    }
 
-    @Autowired
-    JdbcClient jdbc;
+    // Set by verify() from the nested class's context, never from the enclosing class's.
+    private TransferService service;
+    private AccountRepository accounts;
+    private JdbcClient jdbc;
 
-    @Test
-    void ledgerStaysConsistentUnderConcurrentTransfersRetriesAndDuplicates() throws InterruptedException {
+    private void verify(TransferService service, AccountRepository accounts, JdbcClient jdbc, String strategy)
+            throws InterruptedException {
+        this.service = service;
+        this.accounts = accounts;
+        this.jdbc = jdbc;
         List<UUID> ids = IntStream.range(0, ACCOUNTS)
                 .mapToObj(i -> accounts.save(Account.openCustomer()).getId())
                 .toList();
@@ -155,9 +172,9 @@ class ConcurrentTransfersInvariantTest {
         assertMatchesClientModel(ids, submissions, outcomesByKey, created);
 
         System.out.printf(
-                "invariant run (seed %d): %d submissions over %d keys in %d ms -> %d created, %d replayed, "
+                "invariant run (%s, seed %d): %d submissions over %d keys in %d ms -> %d created, %d replayed, "
                         + "%d insufficient funds, %d x 409 retried, 0 invariant violations%n",
-                SEED, submissions.size(), outcomesByKey.size(), elapsed.toMillis(),
+                strategy, SEED, submissions.size(), outcomesByKey.size(), elapsed.toMillis(),
                 created, replayed, insufficient, conflicts.get());
     }
 

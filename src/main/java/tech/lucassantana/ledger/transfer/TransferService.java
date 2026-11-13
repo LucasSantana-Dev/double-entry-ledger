@@ -6,8 +6,6 @@ import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import tech.lucassantana.ledger.account.Account;
-import tech.lucassantana.ledger.account.AccountNotFoundException;
-import tech.lucassantana.ledger.account.AccountRepository;
 import tech.lucassantana.ledger.idempotency.IdempotencyKey;
 import tech.lucassantana.ledger.idempotency.IdempotencyKeyInProgressException;
 import tech.lucassantana.ledger.idempotency.IdempotencyKeyRepository;
@@ -19,17 +17,17 @@ public class TransferService {
 
     private enum Operation { TRANSFER, DEPOSIT }
 
-    private final AccountRepository accounts;
+    private final ConcurrencyStrategy concurrency;
     private final TransferRepository transfers;
     private final EntryRepository entries;
     private final IdempotencyKeyRepository keys;
 
     TransferService(
-            AccountRepository accounts,
+            ConcurrencyStrategy concurrency,
             TransferRepository transfers,
             EntryRepository entries,
             IdempotencyKeyRepository keys) {
-        this.accounts = accounts;
+        this.concurrency = concurrency;
         this.transfers = transfers;
         this.entries = entries;
         this.keys = keys;
@@ -65,21 +63,11 @@ public class TransferService {
             return replay(key, existing.get(), fingerprint);
         }
 
-        // 2. Lock both rows in one global order, smaller id first, so that A->B and B->A
-        //    running at the same time wait for each other instead of deadlocking (ADR 0007).
-        boolean fromFirst = fromId.compareTo(toId) < 0;
-        Account first = lock(fromFirst ? fromId : toId);
-        Account second = lock(fromFirst ? toId : fromId);
-        Account source = fromFirst ? first : second;
-        Account destination = fromFirst ? second : first;
-        if (!destination.isCustomer() || (operation == Operation.TRANSFER && !source.isCustomer())) {
-            throw new InvalidTransferException("the settlement account cannot be used directly");
-        }
+        // 2. Change both balances under the configured concurrency strategy (ADR 0010).
+        concurrency.move(fromId, toId, amount.cents(), operation == Operation.DEPOSIT);
 
-        // 3. Move the money and record why it moved, all in this transaction. Any failure above
-        //    or below rolls back everything, the idempotency key included.
-        source.debit(amount.cents());
-        destination.credit(amount.cents());
+        // 3. Record why the money moved, all in this transaction. Any failure above or below
+        //    rolls back everything, the idempotency key included.
         Transfer transfer = transfers.save(new Transfer(fromId, toId, amount.cents()));
         entries.saveAll(List.of(Entry.debit(transfer), Entry.credit(transfer)));
         keys.save(new IdempotencyKey(key, fingerprint, transfer.getId()));
@@ -92,9 +80,5 @@ public class TransferService {
         }
         Transfer original = transfers.findById(existing.getTransferId()).orElseThrow();
         return new TransferOutcome(original, true);
-    }
-
-    private Account lock(UUID id) {
-        return accounts.findByIdForUpdate(id).orElseThrow(() -> new AccountNotFoundException(id));
     }
 }
