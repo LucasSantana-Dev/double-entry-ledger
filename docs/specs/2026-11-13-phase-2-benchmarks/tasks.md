@@ -5,7 +5,7 @@
 - [x] `ConcurrencyStrategy` interface; `pessimistic` extracted from `TransferService`
 - [x] Invariant test parameterized by strategy (one `@Nested` class per strategy, own context and database)
 - [x] Bounded retry and 503 `concurrency-conflict`; test client treats 503 like 409; retry counters in Micrometer
-- [ ] `conditional-update` strategy
+- [x] `conditional-update` strategy (mutation check: without id order the invariant run fails with 724 conflict retries)
 - [ ] V2 migration with `accounts.version`; `optimistic` strategy
 - [ ] `serializable` strategy
 - [ ] Spike: jmeter-java-dsl on Java 25 (at most one hour; Gatling fallback per ADR 0011)
