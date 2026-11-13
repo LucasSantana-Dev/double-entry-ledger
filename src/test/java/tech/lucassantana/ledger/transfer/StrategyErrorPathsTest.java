@@ -42,6 +42,11 @@ class StrategyErrorPathsTest {
     class Optimistic extends ErrorPaths {
     }
 
+    @Nested
+    @TestPropertySource(properties = "ledger.concurrency.strategy=serializable")
+    class Serializable extends ErrorPaths {
+    }
+
     abstract static class ErrorPaths {
 
         @Autowired

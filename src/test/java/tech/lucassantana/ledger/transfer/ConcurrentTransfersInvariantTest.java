@@ -115,6 +115,28 @@ class ConcurrentTransfersInvariantTest {
         }
     }
 
+    @Nested
+    @TestPropertySource(properties = "ledger.concurrency.strategy=serializable")
+    class Serializable {
+
+        @Test
+        void ledgerStaysConsistent(@Autowired TransferService service, @Autowired AccountRepository accounts,
+                @Autowired JdbcClient jdbc, @Autowired ConcurrencyStrategy strategy, @Autowired MeterRegistry meters)
+                throws InterruptedException {
+            assertThat(strategy).isInstanceOf(SerializableStrategy.class);
+            verify(service, accounts, jdbc, "serializable");
+            // Pooled connections went back to the default level: only transfers run serializable.
+            assertThat(jdbcIsolation(jdbc)).isEqualTo("read committed");
+            // The workload must really have produced serialization failures, or the run proves
+            // nothing about the retry path.
+            assertThat(meters.counter("ledger.transfer.conflict.retries").count()).as("conflict retries").isPositive();
+        }
+
+        private static String jdbcIsolation(JdbcClient jdbc) {
+            return jdbc.sql("show transaction_isolation").query(String.class).single();
+        }
+    }
+
     /**
      * For the strategies that write in id order and never abort on conflict: a retry would mean a
      * deadlock that the bounded retry hid, so there must be none.

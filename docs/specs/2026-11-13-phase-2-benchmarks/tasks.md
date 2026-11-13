@@ -7,7 +7,7 @@
 - [x] Bounded retry and 503 `concurrency-conflict`; test client treats 503 like 409; retry counters in Micrometer
 - [x] `conditional-update` strategy (mutation check: without id order the invariant run fails with 724 conflict retries)
 - [x] V2 migration with `accounts.version`; `optimistic` strategy (updates flushed in id order via `hibernate.order_updates`)
-- [ ] `serializable` strategy
+- [x] `serializable` strategy (`SerializableIsolationTest` proves the level; the invariant test alone would pass at read committed thanks to `@Version`)
 - [ ] Spike: jmeter-java-dsl on Java 25 (at most one hour; Gatling fallback per ADR 0011)
 - [ ] Load plan and one local cell under `-Pbenchmark`, metrics collected
 - [ ] Benchmark workflow (manual, 24 cells x 5, shuffled) and results aggregation
