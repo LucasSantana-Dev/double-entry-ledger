@@ -121,24 +121,16 @@
 		<!-- Load benchmarks (phase 2, ADRs 0011 to 0014): ./mvnw -Pbenchmark verify. Kept out of the default build. -->
 		<profile>
 			<id>benchmark</id>
-			<!-- Patched version of a JMeter transitive library the load plan still loads. -->
-			<dependencyManagement>
-				<dependencies>
-					<dependency>
-						<groupId>com.thoughtworks.xstream</groupId>
-						<artifactId>xstream</artifactId>
-						<version>1.4.21</version>
-					</dependency>
-				</dependencies>
-			</dependencyManagement>
 			<dependencies>
+				<!-- JMeter libraries with known CVEs are excluded when an HTTP-only plan run without the
+				     JMeter GUI never loads them: Tika (document view of responses), dnsjava (DNS cache
+				     manager), Batik through lets-plot (GUI charts), jsoup (embedded resources and CSS
+				     extractor). -->
 				<dependency>
 					<groupId>us.abstracta.jmeter</groupId>
 					<artifactId>jmeter-java-dsl</artifactId>
 					<version>2.3</version>
 					<scope>test</scope>
-					<!-- JMeter libraries with known CVEs that an HTTP-only plan never loads: Tika (document
-					     view of responses), dnsjava (DNS cache manager), Batik through lets-plot (GUI charts). -->
 					<exclusions>
 						<exclusion>
 							<groupId>org.apache.tika</groupId>
@@ -150,6 +142,47 @@
 						</exclusion>
 						<exclusion>
 							<groupId>org.jetbrains.lets-plot</groupId>
+							<artifactId>*</artifactId>
+						</exclusion>
+						<exclusion>
+							<groupId>org.jsoup</groupId>
+							<artifactId>jsoup</artifactId>
+						</exclusion>
+						<exclusion>
+							<groupId>com.thoughtworks.xstream</groupId>
+							<artifactId>xstream</artifactId>
+						</exclusion>
+					</exclusions>
+				</dependency>
+				<!-- Loaded by JMeter's SaveService for the results file; pinned to the patched release. -->
+				<dependency>
+					<groupId>com.thoughtworks.xstream</groupId>
+					<artifactId>xstream</artifactId>
+					<version>1.4.21</version>
+					<scope>test</scope>
+				</dependency>
+				<!-- The thread-group plugin's common library declares JMeter 2.13, which Maven replaces with
+				     5.6.3 but dependency scanners still report; declared here without it. -->
+				<dependency>
+					<groupId>kg.apc</groupId>
+					<artifactId>jmeter-plugins-cmn-jmeter</artifactId>
+					<version>0.6</version>
+					<scope>test</scope>
+					<exclusions>
+						<exclusion>
+							<groupId>org.apache.jmeter</groupId>
+							<artifactId>*</artifactId>
+						</exclusion>
+					</exclusions>
+				</dependency>
+				<dependency>
+					<groupId>kg.apc</groupId>
+					<artifactId>jmeter-plugins-charts</artifactId>
+					<version>0.1</version>
+					<scope>test</scope>
+					<exclusions>
+						<exclusion>
+							<groupId>org.apache.jmeter</groupId>
 							<artifactId>*</artifactId>
 						</exclusion>
 					</exclusions>
