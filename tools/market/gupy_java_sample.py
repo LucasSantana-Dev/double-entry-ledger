@@ -1,4 +1,4 @@
-"""Reproduce the Brazilian Java job-posting sample behind ADRs 0001 to 0004.
+"""Reproduce the Brazilian Java job-posting sample behind ADRs 0001 to 0004 and 0011.
 
 Stdlib only. Usage: python tools/market/gupy_java_sample.py
 Counts keyword mentions in every Gupy posting whose title contains the word "Java".
@@ -30,6 +30,15 @@ KEYWORDS = {
     "framework": {"Spring": r"\bspring\b", "Spring Boot": r"spring\s*boot", "Quarkus": r"quarkus"},
     "messaging": {"Kafka": r"kafka", "RabbitMQ": r"rabbit", "SQS": r"\bsqs\b"},
     "testing": {"JUnit": r"junit", "TDD": r"\btdd\b", "Testcontainers": r"testcontainers"},
+    # Added for phase 2 (ADR 0011).
+    "load testing": {
+        "JMeter": r"jmeter",
+        "k6": r"\bk6\b",
+        "Gatling": r"gatling",
+        "JMH": r"\bjmh\b",
+        "load/performance testing phrase": r"testes? de (carga|performance|desempenho|estresse|stress)"
+                                           r"|load test|performance test|stress test",
+    },
 }
 
 # Benefit phrases that would otherwise match the finance regex ("banco de dados" is "database").
