@@ -67,6 +67,7 @@ curl -s localhost:8080/accounts/<id>
 | 404 | Unknown account |
 | 409 | Same key while the first request is still running: retry later |
 | 422 | Insufficient funds, same key with a different payload, invalid transfer |
+| 503 | Transfer kept conflicting with concurrent ones after 5 attempts; nothing was written, retry with the same key after `Retry-After` ([ADR 0010](docs/adr/0010-four-concurrency-strategies-and-bounded-retry.md)) |
 
 ## Running
 

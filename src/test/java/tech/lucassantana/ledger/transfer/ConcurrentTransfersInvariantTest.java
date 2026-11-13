@@ -2,6 +2,7 @@ package tech.lucassantana.ledger.transfer;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -76,9 +77,13 @@ class ConcurrentTransfersInvariantTest {
 
         @Test
         void ledgerStaysConsistent(@Autowired TransferService service, @Autowired AccountRepository accounts,
-                @Autowired JdbcClient jdbc, @Autowired ConcurrencyStrategy strategy) throws InterruptedException {
+                @Autowired JdbcClient jdbc, @Autowired ConcurrencyStrategy strategy, @Autowired MeterRegistry meters)
+                throws InterruptedException {
             assertThat(strategy).isInstanceOf(PessimisticStrategy.class);
             verify(service, accounts, jdbc, "pessimistic");
+            // Ordered row locks never deadlock, so nothing was retried. A retry here would mean a
+            // deadlock that the bounded retry hid.
+            assertThat(meters.counter("ledger.transfer.conflict.retries").count()).isZero();
         }
     }
 
@@ -101,6 +106,7 @@ class ConcurrentTransfersInvariantTest {
         Map<String, List<Outcome>> outcomesByKey = new ConcurrentHashMap<>();
         List<Throwable> unexpected = Collections.synchronizedList(new ArrayList<>());
         AtomicInteger conflicts = new AtomicInteger();
+        AtomicInteger unavailable = new AtomicInteger();
         Semaphore inFlight = new Semaphore(IN_FLIGHT);
 
         long start = System.nanoTime();
@@ -109,7 +115,7 @@ class ConcurrentTransfersInvariantTest {
                 inFlight.acquire();
                 executor.submit(() -> {
                     try {
-                        Outcome outcome = submitLikeAClient(operation, conflicts);
+                        Outcome outcome = submitLikeAClient(operation, conflicts, unavailable);
                         outcomesByKey.computeIfAbsent(operation.key(), k -> Collections.synchronizedList(new ArrayList<>()))
                                 .add(outcome);
                     } catch (Throwable t) {
@@ -173,9 +179,9 @@ class ConcurrentTransfersInvariantTest {
 
         System.out.printf(
                 "invariant run (%s, seed %d): %d submissions over %d keys in %d ms -> %d created, %d replayed, "
-                        + "%d insufficient funds, %d x 409 retried, 0 invariant violations%n",
+                        + "%d insufficient funds, %d x 409 and %d x 503 retried, 0 invariant violations%n",
                 strategy, SEED, submissions.size(), outcomesByKey.size(), elapsed.toMillis(),
-                created, replayed, insufficient, conflicts.get());
+                created, replayed, insufficient, conflicts.get(), unavailable.get());
     }
 
     private void assertMatchesClientModel(
@@ -243,8 +249,12 @@ class ConcurrentTransfersInvariantTest {
         return random.nextDouble() < HOT_ACCOUNT_RATE ? ids.getFirst() : ids.get(random.nextInt(ids.size()));
     }
 
-    /** A well-behaved client: 409 means "still running", so it waits and retries with the same key. */
-    private Outcome submitLikeAClient(Operation operation, AtomicInteger conflicts) throws InterruptedException {
+    /**
+     * A well-behaved client: 409 means "still running" and 503 means "conflicted, nothing written"
+     * (ADR 0010), so in both cases it waits and retries with the same key.
+     */
+    private Outcome submitLikeAClient(Operation operation, AtomicInteger conflicts, AtomicInteger unavailable)
+            throws InterruptedException {
         for (int attempt = 0; attempt < 1_000; attempt++) {
             try {
                 TransferOutcome outcome = service.transfer(
@@ -252,6 +262,9 @@ class ConcurrentTransfersInvariantTest {
                 return new Outcome(outcome.replayed() ? Result.REPLAYED : Result.CREATED, outcome.transfer().getId());
             } catch (IdempotencyKeyInProgressException e) {
                 conflicts.incrementAndGet();
+                Thread.sleep(5);
+            } catch (ConcurrencyConflictException e) {
+                unavailable.incrementAndGet();
                 Thread.sleep(5);
             } catch (InsufficientFundsException e) {
                 return new Outcome(Result.INSUFFICIENT_FUNDS, null);

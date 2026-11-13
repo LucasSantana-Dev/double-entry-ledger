@@ -4,7 +4,7 @@
 - [x] Gupy sample rerun with load testing and concurrency terms
 - [x] `ConcurrencyStrategy` interface; `pessimistic` extracted from `TransferService`
 - [x] Invariant test parameterized by strategy (one `@Nested` class per strategy, own context and database)
-- [ ] Bounded retry and 503 `concurrency-conflict`; test client treats 503 like 409
+- [x] Bounded retry and 503 `concurrency-conflict`; test client treats 503 like 409; retry counters in Micrometer
 - [ ] `conditional-update` strategy
 - [ ] V2 migration with `accounts.version`; `optimistic` strategy
 - [ ] `serializable` strategy
