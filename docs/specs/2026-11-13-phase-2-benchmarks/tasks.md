@@ -10,6 +10,7 @@
 - [x] `serializable` strategy (`SerializableIsolationTest` proves the level; the invariant test alone would pass at read committed thanks to `@Version`)
 - [x] Spike: jmeter-java-dsl on Java 25 works (result in ADR 0011); app must run in its own JVM per cell
 - [x] Load plan under `-Pbenchmark` (`LedgerBenchmark`, ADR 0014): child JVM and fresh PostgreSQL per cell, metrics and ledger check per cell; smoke-run locally on 3 cells
-- [ ] Benchmark workflow (manual, 24 cells x 5, shuffled) and results aggregation
+- [x] Latency per response status, 201 and all (ADR 0015)
+- [x] Benchmark workflow (`.github/workflows/benchmark.yml`, manual, 24 cells x 5, shuffled) and aggregation (`tools/benchmark/aggregate.py`, median + 95% bootstrap interval); smoke-run locally on 2 cells x 2
 - [ ] One full published run, results committed
 - [ ] README results and limits; ADR 0007 points to them
