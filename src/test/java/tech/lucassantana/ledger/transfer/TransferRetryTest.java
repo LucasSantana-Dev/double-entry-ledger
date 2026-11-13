@@ -18,6 +18,7 @@ import io.micrometer.core.instrument.MeterRegistry;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.Answers;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
@@ -40,7 +41,8 @@ import tech.lucassantana.ledger.account.InsufficientFundsException;
 @Import(TestcontainersConfiguration.class)
 class TransferRetryTest {
 
-    @MockitoBean
+    /** Real default methods (isolation level), stubbed {@code move}. */
+    @MockitoBean(answers = Answers.CALLS_REAL_METHODS)
     ConcurrencyStrategy strategy;
 
     @Autowired

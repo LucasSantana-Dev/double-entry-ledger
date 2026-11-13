@@ -1,6 +1,7 @@
 package tech.lucassantana.ledger.transfer;
 
 import java.util.UUID;
+import org.springframework.transaction.TransactionDefinition;
 
 /**
  * How a transfer changes two balances without lost updates when other transfers touch the same
@@ -20,4 +21,9 @@ interface ConcurrencyStrategy {
      * @throws tech.lucassantana.ledger.account.InsufficientFundsException if a customer source holds less than {@code cents}
      */
     void move(UUID fromId, UUID toId, long cents, boolean sourceMayBeSettlement);
+
+    /** Isolation level of the transaction {@code move} runs in; the database default (read committed) unless overridden. */
+    default int isolationLevel() {
+        return TransactionDefinition.ISOLATION_DEFAULT;
+    }
 }

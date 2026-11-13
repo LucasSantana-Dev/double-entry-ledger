@@ -50,6 +50,7 @@ public class TransferService {
             EntryRepository entries,
             IdempotencyKeyRepository keys) {
         this.transaction = new TransactionTemplate(transactionManager);
+        this.transaction.setIsolationLevel(concurrency.isolationLevel());
         this.retries = meters.counter("ledger.transfer.conflict.retries");
         this.exhausted = meters.counter("ledger.transfer.conflict.exhausted");
         this.concurrency = concurrency;
