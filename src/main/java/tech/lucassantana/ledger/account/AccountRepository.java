@@ -23,7 +23,7 @@ public interface AccountRepository extends JpaRepository<Account, UUID> {
      */
     @Modifying
     @Query(value = """
-            update accounts set balance_cents = balance_cents - :cents
+            update accounts set balance_cents = balance_cents - :cents, version = version + 1
             where id = :id
               and ((kind = 'CUSTOMER' and balance_cents >= :cents) or (:settlementAllowed and kind = 'SETTLEMENT'))
             """, nativeQuery = true)
@@ -32,7 +32,7 @@ public interface AccountRepository extends JpaRepository<Account, UUID> {
     /** Credits a customer account. Returns 0 when the account is missing or is the settlement account. */
     @Modifying
     @Query(value = """
-            update accounts set balance_cents = balance_cents + :cents
+            update accounts set balance_cents = balance_cents + :cents, version = version + 1
             where id = :id and kind = 'CUSTOMER'
             """, nativeQuery = true)
     int creditCustomer(UUID id, long cents);

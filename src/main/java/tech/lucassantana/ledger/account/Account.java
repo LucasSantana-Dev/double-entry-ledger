@@ -8,6 +8,7 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import jakarta.persistence.Version;
 import java.time.Instant;
 import java.util.UUID;
 
@@ -32,6 +33,15 @@ public class Account {
 
     @Column(name = "balance_cents", nullable = false)
     private long balanceCents;
+
+    /**
+     * Bumped on every balance change. Hibernate adds {@code where version = ?} to each update, so
+     * a write based on a stale read fails instead of overwriting (optimistic strategy, ADR 0010).
+     * Harmless under the pessimistic strategy, which already holds the row lock when it writes.
+     */
+    @Version
+    @Column(nullable = false)
+    private long version;
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;

@@ -99,6 +99,22 @@ class ConcurrentTransfersInvariantTest {
         }
     }
 
+    @Nested
+    @TestPropertySource(properties = "ledger.concurrency.strategy=optimistic")
+    class Optimistic {
+
+        @Test
+        void ledgerStaysConsistent(@Autowired TransferService service, @Autowired AccountRepository accounts,
+                @Autowired JdbcClient jdbc, @Autowired ConcurrencyStrategy strategy, @Autowired MeterRegistry meters)
+                throws InterruptedException {
+            assertThat(strategy).isInstanceOf(OptimisticStrategy.class);
+            verify(service, accounts, jdbc, "optimistic");
+            // The workload must really have produced version conflicts, or the run proves nothing
+            // about the retry path.
+            assertThat(meters.counter("ledger.transfer.conflict.retries").count()).as("conflict retries").isPositive();
+        }
+    }
+
     /**
      * For the strategies that write in id order and never abort on conflict: a retry would mean a
      * deadlock that the bounded retry hid, so there must be none.

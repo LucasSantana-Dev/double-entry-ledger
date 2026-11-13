@@ -37,6 +37,11 @@ class StrategyErrorPathsTest {
     class ConditionalUpdate extends ErrorPaths {
     }
 
+    @Nested
+    @TestPropertySource(properties = "ledger.concurrency.strategy=optimistic")
+    class Optimistic extends ErrorPaths {
+    }
+
     abstract static class ErrorPaths {
 
         @Autowired
