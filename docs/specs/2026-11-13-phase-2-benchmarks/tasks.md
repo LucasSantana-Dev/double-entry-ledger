@@ -1,0 +1,15 @@
+# Phase 2 tasks
+
+- [x] Spec and ADRs 0010 to 0013 from the decisions taken on 2026-11-13
+- [x] Gupy sample rerun with load testing and concurrency terms
+- [ ] `ConcurrencyStrategy` interface; `pessimistic` extracted from `TransferService`
+- [ ] Invariant test parameterized by strategy
+- [ ] Bounded retry and 503 `concurrency-conflict`; test client treats 503 like 409
+- [ ] `conditional-update` strategy
+- [ ] V2 migration with `accounts.version`; `optimistic` strategy
+- [ ] `serializable` strategy
+- [ ] Spike: jmeter-java-dsl on Java 25 (at most one hour; Gatling fallback per ADR 0011)
+- [ ] Load plan and one local cell under `-Pbenchmark`, metrics collected
+- [ ] Benchmark workflow (manual, 24 cells x 5, shuffled) and results aggregation
+- [ ] One full published run, results committed
+- [ ] README results and limits; ADR 0007 points to them

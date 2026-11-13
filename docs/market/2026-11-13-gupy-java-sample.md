@@ -45,3 +45,17 @@ Titles per language on the same portal: java 126, python 19, node and nodejs 12,
 - One portal, skewed toward mid and large companies and consultancies. The largest company holds 11 of the 126 postings.
 - Keyword counts do not separate required from nice to have, and a posting that does not name a tool may still use it.
 - "banco de dados", "banco de horas" and "seguro de vida" inflated the first finance count to 88%; they are removed before counting.
+
+## Rerun for phase 2: load testing tools (2026-11-13, later the same day)
+
+Evidence for ADR 0011. Same script, with a `load testing` group added. The portal returned 100 postings from 46 companies on this run, fewer than in the morning run above, because postings closed in between.
+
+| Item | Postings mentioning it (of 100) |
+|---|---|
+| JMeter | 11 |
+| k6 | 1 |
+| Gatling | 0 |
+| JMH | 0 |
+| A load or performance testing phrase (Portuguese or English) | 4 |
+
+The sample is small: 11 against 0 shows a direction, not a precise share.
