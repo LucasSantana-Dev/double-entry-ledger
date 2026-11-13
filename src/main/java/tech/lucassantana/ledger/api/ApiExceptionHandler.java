@@ -1,8 +1,10 @@
 package tech.lucassantana.ledger.api;
 
 import java.net.URI;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ProblemDetail;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import tech.lucassantana.ledger.account.AccountNotFoundException;
@@ -11,6 +13,7 @@ import tech.lucassantana.ledger.idempotency.IdempotencyKeyInProgressException;
 import tech.lucassantana.ledger.idempotency.IdempotencyKeyReusedException;
 import tech.lucassantana.ledger.idempotency.InvalidIdempotencyKeyException;
 import tech.lucassantana.ledger.money.InvalidAmountException;
+import tech.lucassantana.ledger.transfer.ConcurrencyConflictException;
 import tech.lucassantana.ledger.transfer.InvalidTransferException;
 
 /** Domain failures as RFC 9457 problem details, one {@code type} per failure. */
@@ -52,6 +55,14 @@ class ApiExceptionHandler {
     @ExceptionHandler
     ProblemDetail invalidTransfer(InvalidTransferException ex) {
         return problem(422, "invalid-transfer", ex);
+    }
+
+    /** The strategy kept aborting on conflict (ADR 0010). Nothing was written; retry with the same key. */
+    @ExceptionHandler
+    ResponseEntity<ProblemDetail> concurrencyConflict(ConcurrencyConflictException ex) {
+        return ResponseEntity.status(503)
+                .header(HttpHeaders.RETRY_AFTER, "1")
+                .body(problem(503, "concurrency-conflict", ex));
     }
 
     private static ProblemDetail problem(int status, String type, RuntimeException ex) {
