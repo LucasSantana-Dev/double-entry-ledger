@@ -43,3 +43,9 @@ Option 1. JMeter is the only load tool with a visible signal in the postings, an
 The risk above did not materialize. `JmeterSpikeBenchmark` (`./mvnw test -Pbenchmark`) ran on JDK 25.0.5 with jmeter-java-dsl 1.29.1 against this Spring Boot 4.1.2 app over HTTP: 400 transfers from 8 JMeter threads, 0 errors, each request with its own `Idempotency-Key` from the JMeter function `${__UUID()}` and its amount set by a Java lambda in a `jsr223PreProcessor`. The lambda runs in process without Groovy, which is how the real plan will pick the hot or a random account per request. The default `./mvnw verify` does not compile or run anything from the `benchmark` profile.
 
 One finding for the plan: in the spike, JMeter and the application share one JVM. The real benchmark must start the application in its own JVM per cell, because the thread grid reports the application's live threads, heap and CPU, and 1,024 JMeter threads in the same process would pollute them.
+
+## Dependency update (2026-11-13)
+
+The version evidence above was wrong: the Maven Central search used for it was stale. `maven-metadata.xml` lists jmeter-java-dsl 1.30, 2.0 to 2.3, and 2.3 brings JMeter 5.6.3. On PR #2 the Socket Security check blocked 1.29.1, whose JMeter 5.5 pulls libraries with critical and high CVEs (commons-text 1.9, Tika 1.28, xalan 2.7.2, Batik 1.14, xstream 1.4.19, dnsjava 2.1.9, jsoup 1.15).
+
+The `benchmark` profile now uses 2.3, pins xstream to 1.4.21, and excludes Tika, dnsjava and lets-plot with its Batik: an HTTP-only plan run without the JMeter GUI never loads them. A smoke run of two cells (pessimistic 30% hot, serializable 90% hot, 10 s windows) passed with these settings, ledger checks included. Everything stays in test scope of a profile the default build does not activate, so none of it reaches the application jar.
