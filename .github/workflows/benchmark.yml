@@ -1,0 +1,71 @@
+name: Benchmark
+
+# Manual only (ADR 0013): a full run takes about 3 hours of the 6 hour job limit.
+on:
+  workflow_dispatch:
+    inputs:
+      repetitions:
+        description: Repetitions of every cell, shuffled together
+        type: number
+        default: 5
+      grid:
+        description: Which grid to run
+        type: choice
+        options: [all, strategy, threads]
+        default: all
+      cells:
+        description: Optional comma-separated substrings of cell ids, for partial runs
+        type: string
+        default: ''
+      warmup:
+        description: Warm-up per cell, ISO-8601 duration
+        type: string
+        default: PT30S
+      measure:
+        description: Measured window per cell, ISO-8601 duration
+        type: string
+        default: PT60S
+
+permissions:
+  contents: read
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: maven
+      # Inputs go through the environment, never straight into the script.
+      - name: Run cells
+        env:
+          REPETITIONS: ${{ inputs.repetitions }}
+          GRID: ${{ inputs.grid }}
+          CELLS: ${{ inputs.cells }}
+          WARMUP: ${{ inputs.warmup }}
+          MEASURE: ${{ inputs.measure }}
+        run: >
+          ./mvnw -B -Pbenchmark verify
+          "-Dledger.bench.repetitions=$REPETITIONS"
+          "-Dledger.bench.grid=$GRID"
+          "-Dledger.bench.cells=$CELLS"
+          "-Dledger.bench.warmup=$WARMUP"
+          "-Dledger.bench.measure=$MEASURE"
+      - name: Aggregate
+        if: always()
+        run: |
+          if [ -f target/benchmark/results.jsonl ]; then
+            python3 tools/benchmark/aggregate.py target/benchmark
+            cat target/benchmark/results.md >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: Keep results and application logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-${{ github.run_id }}
+          path: target/benchmark/
+          if-no-files-found: warn

@@ -3,6 +3,7 @@ package tech.lucassantana.ledger.benchmark;
 import static org.assertj.core.api.Assertions.assertThat;
 import static us.abstracta.jmeter.javadsl.JmeterDsl.httpSampler;
 import static us.abstracta.jmeter.javadsl.JmeterDsl.jsr223PreProcessor;
+import static us.abstracta.jmeter.javadsl.JmeterDsl.jtlWriter;
 import static us.abstracta.jmeter.javadsl.JmeterDsl.testPlan;
 import static us.abstracta.jmeter.javadsl.JmeterDsl.threadGroup;
 
@@ -41,8 +42,8 @@ import org.apache.http.entity.ContentType;
 import org.junit.jupiter.api.Test;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 import org.testcontainers.utility.DockerImageName;
+import us.abstracta.jmeter.javadsl.core.DslTestPlan.TestPlanChild;
 import us.abstracta.jmeter.javadsl.core.TestPlanStats;
-import us.abstracta.jmeter.javadsl.core.stats.StatsSummary;
 
 /**
  * The phase 2 benchmark (spec {@code docs/specs/2026-11-13-phase-2-benchmarks}, ADRs 0010 to 0014).
@@ -131,18 +132,20 @@ class LedgerBenchmark {
             try (AppProcess app = AppProcess.start(JAR, cell, db.getJdbcUrl(), db.getUsername(), db.getPassword(), log)) {
                 List<String> accounts = seed(app);
 
-                load(app, accounts, cell, WARMUP); // numbers discarded
+                load(app, accounts, cell, WARMUP, null); // numbers discarded
 
                 Snapshot before = Snapshot.take(app, db);
                 ResourceSampler sampler = ResourceSampler.start(app);
                 Instant start = Instant.now();
-                TestPlanStats stats = load(app, accounts, cell, MEASURE);
+                Path samples = Files.createTempDirectory(OUT, "jtl-");
+                TestPlanStats stats = load(app, accounts, cell, MEASURE, samples);
                 double seconds = Duration.between(start, Instant.now()).toMillis() / 1000.0;
                 ResourceSampler.Summary resources = sampler.stop();
                 Snapshot after = Snapshot.take(app, db);
+                Latencies latencies = Latencies.read(samples);
 
                 checkLedger(db);
-                return result(run, stats, seconds, before, after, resources);
+                return result(run, stats, latencies, seconds, before, after, resources);
             }
         }
     }
@@ -208,13 +211,20 @@ class LedgerBenchmark {
      * the previous one answered, for {@code duration}. With probability {@code hotShare} the
      * transfer has the hot account on one side (direction at random); otherwise both sides are
      * uniform over all accounts. Amounts from 0.01 to 1.00, every request with a fresh key.
+     *
+     * @param samplesDir where JMeter writes every sample's status and elapsed time (ADR 0015); null for the warm-up
      */
-    private static TestPlanStats load(AppProcess app, List<String> ids, Cell cell, Duration duration)
+    private static TestPlanStats load(AppProcess app, List<String> ids, Cell cell, Duration duration, Path samplesDir)
             throws IOException, InterruptedException {
         String hot = ids.getFirst();
         int n = ids.size();
         double hotShare = cell.hotShare();
-        return testPlan(
+        List<TestPlanChild> children = new ArrayList<>();
+        if (samplesDir != null) {
+            children.add(jtlWriter(samplesDir.toString(), "samples.jtl")
+                    .withAllFields(false).withFieldNames(true).withElapsedTime(true).withResponseCode(true));
+        }
+        children.add(
                 threadGroup(cell.users(), duration,
                         httpSampler(app.baseUrl + "/transfers")
                                 .post("{\"fromAccountId\":\"${from}\",\"toAccountId\":\"${to}\",\"amount\":\"${amount}\"}",
@@ -239,8 +249,49 @@ class LedgerBenchmark {
                                     s.vars.put("from", from);
                                     s.vars.put("to", to);
                                     s.vars.put("amount", "%d.%02d".formatted(cents / 100, cents % 100));
-                                }))))
-                .run();
+                                }))));
+        return testPlan(children.toArray(TestPlanChild[]::new)).run();
+    }
+
+    /**
+     * Latency percentiles of created transfers (201) and of every response, from the same JMeter
+     * samples, nearest-rank method (ADR 0015). The samples file is deleted once read.
+     */
+    private record Latencies(long[] created, long[] all) {
+
+        static Latencies read(Path dir) throws IOException {
+            Path file = dir.resolve("samples.jtl");
+            List<String> lines = Files.readAllLines(file);
+            List<String> header = List.of(lines.getFirst().split(","));
+            int elapsed = header.indexOf("elapsed");
+            int code = header.indexOf("responseCode");
+            List<Long> created = new ArrayList<>();
+            List<Long> all = new ArrayList<>();
+            for (String line : lines.subList(1, lines.size())) {
+                String[] fields = line.split(",");
+                long ms = Long.parseLong(fields[elapsed]);
+                all.add(ms);
+                if (fields[code].equals("201")) {
+                    created.add(ms);
+                }
+            }
+            Files.delete(file);
+            Files.delete(dir);
+            return new Latencies(sorted(created), sorted(all));
+        }
+
+        private static long[] sorted(List<Long> values) {
+            return values.stream().mapToLong(Long::longValue).sorted().toArray();
+        }
+
+        /** Nearest rank; -1 when there is no sample, for example a cell where every request got 503. */
+        static long percentile(long[] sorted, double p) {
+            if (sorted.length == 0) {
+                return -1;
+            }
+            int rank = (int) Math.ceil(p / 100.0 * sorted.length);
+            return sorted[Math.max(0, rank - 1)];
+        }
     }
 
     /** Counters read before and after the measured window; the result is their difference. */
@@ -329,10 +380,9 @@ class LedgerBenchmark {
         }
     }
 
-    private static Map<String, Object> result(Run run, TestPlanStats stats, double seconds, Snapshot before,
-            Snapshot after, ResourceSampler.Summary resources) {
+    private static Map<String, Object> result(Run run, TestPlanStats stats, Latencies latencies, double seconds,
+            Snapshot before, Snapshot after, ResourceSampler.Summary resources) {
         Cell cell = run.cell();
-        StatsSummary overall = stats.overall();
         Map<String, Object> r = new LinkedHashMap<>();
         r.put("cell", cell.id());
         r.put("grid", cell.grid());
@@ -342,13 +392,19 @@ class LedgerBenchmark {
         r.put("threads", cell.virtualThreads() ? "virtual" : "platform");
         r.put("repetition", run.repetition());
         r.put("measuredSeconds", round(seconds));
-        r.put("requests", overall.samplesCount());
-        r.put("errors", overall.errorsCount());
+        r.put("requests", stats.overall().samplesCount());
+        r.put("errors", stats.overall().errorsCount());
         r.put("createdPerSecond", round((after.created() - before.created()) / seconds));
-        r.put("p50Ms", overall.sampleTime().median().toMillis());
-        r.put("p95Ms", overall.sampleTime().perc95().toMillis());
-        r.put("p99Ms", overall.sampleTime().perc99().toMillis());
-        r.put("maxMs", overall.sampleTime().max().toMillis());
+        // Created transfers only, the headline (ADR 0015).
+        r.put("p50Ms", Latencies.percentile(latencies.created(), 50));
+        r.put("p95Ms", Latencies.percentile(latencies.created(), 95));
+        r.put("p99Ms", Latencies.percentile(latencies.created(), 99));
+        r.put("maxMs", Latencies.percentile(latencies.created(), 100));
+        // Every response, 503 included.
+        r.put("allP50Ms", Latencies.percentile(latencies.all(), 50));
+        r.put("allP95Ms", Latencies.percentile(latencies.all(), 95));
+        r.put("allP99Ms", Latencies.percentile(latencies.all(), 99));
+        r.put("allMaxMs", Latencies.percentile(latencies.all(), 100));
         r.put("retries", Math.round(after.retries() - before.retries()));
         r.put("unavailable503", Math.round(after.unavailable503() - before.unavailable503()));
         r.put("conflict409", Math.round(after.conflict409() - before.conflict409()));
