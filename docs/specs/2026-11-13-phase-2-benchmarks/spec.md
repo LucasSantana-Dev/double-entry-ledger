@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: done
 date: 2026-11-13
 phase: 2
 tags: [benchmark, concurrency, postgres, virtual-threads, jmeter]

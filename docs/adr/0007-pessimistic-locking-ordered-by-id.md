@@ -1,6 +1,6 @@
 # 0007. Pessimistic row locks, acquired in id order
 
-- Status: accepted for phase 1; phase 2 measures the four options (ADR 0010, spec `docs/specs/2026-11-13-phase-2-benchmarks/`)
+- Status: accepted for phase 1; phase 2 measured the four options (ADR 0010, spec `docs/specs/2026-11-13-phase-2-benchmarks/`); results in the README section "Benchmark results" and `docs/benchmarks/2026-11-13/`
 - Date: 2026-11-13
 
 ## Context
