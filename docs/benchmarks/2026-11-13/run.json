@@ -1,0 +1,1 @@
+{"startedAt":"2026-11-13T21:15:00.338721930Z","githubRunId":"43508927532","cpu":"AMD EPYC 9V45 96-Core Processor","logicalCpus":4,"os":"Linux 7.0.0-1019-azure","java":"25.0.5+8-LTS","grid":"all","cellFilter":"","repetitions":5,"plannedCells":120,"warmup":"PT30S","measure":"PT1M","seed":20261113}

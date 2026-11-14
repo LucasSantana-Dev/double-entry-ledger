@@ -1,0 +1,1771 @@
+{
+  "run": {
+    "startedAt": "2026-11-13T21:15:00.338721930Z",
+    "githubRunId": "43508927532",
+    "cpu": "AMD EPYC 9V45 96-Core Processor",
+    "logicalCpus": 4,
+    "os": "Linux 7.0.0-1019-azure",
+    "java": "25.0.5+8-LTS",
+    "grid": "all",
+    "cellFilter": "",
+    "repetitions": 5,
+    "plannedCells": 120,
+    "warmup": "PT30S",
+    "measure": "PT1M",
+    "seed": 20261113
+  },
+  "cells": {
+    "strategy-conditional-update-hot00-u256-virtual": {
+      "grid": "strategy",
+      "strategy": "conditional-update",
+      "hotShare": 0.0,
+      "users": 256,
+      "threads": "virtual",
+      "repetitions": 5,
+      "createdPerSecond": {
+        "median": 2042.5,
+        "ciLow": 2000.32,
+        "ciHigh": 2159.93
+      },
+      "p50Ms": {
+        "median": 123,
+        "ciLow": 117,
+        "ciHigh": 125
+      },
+      "p95Ms": {
+        "median": 246,
+        "ciLow": 233,
+        "ciHigh": 252
+      },
+      "p99Ms": {
+        "median": 354,
+        "ciLow": 335,
+        "ciHigh": 365
+      },
+      "allP50Ms": {
+        "median": 123,
+        "ciLow": 117,
+        "ciHigh": 125
+      },
+      "allP99Ms": {
+        "median": 354,
+        "ciLow": 335,
+        "ciHigh": 365
+      },
+      "retries": {
+        "median": 0,
+        "ciLow": 0,
+        "ciHigh": 0
+      },
+      "unavailable503": {
+        "median": 0,
+        "ciLow": 0,
+        "ciHigh": 0
+      },
+      "deadlocks": {
+        "median": 0,
+        "ciLow": 0,
+        "ciHigh": 0
+      },
+      "peakPlatformThreads": {
+        "median": 22,
+        "ciLow": 22,
+        "ciHigh": 22
+      },
+      "peakHeapMb": {
+        "median": 663,
+        "ciLow": 654,
+        "ciHigh": 669
+      },
+      "meanAppCpu": {
+        "median": 0.27,
+        "ciLow": 0.27,
+        "ciHigh": 0.28
+      },
+      "meanLoadGeneratorCpu": {
+        "median": 0.07,
+        "ciLow": 0.07,
+        "ciHigh": 0.07
+      }
+    },
+    "strategy-conditional-update-hot30-u256-virtual": {
+      "grid": "strategy",
+      "strategy": "conditional-update",
+      "hotShare": 0.3,
+      "users": 256,
+      "threads": "virtual",
+      "repetitions": 5,
+      "createdPerSecond": {
+        "median": 1602.44,
+        "ciLow": 1524.51,
+        "ciHigh": 1729.24
+      },
+      "p50Ms": {
+        "median": 150,
+        "ciLow": 145,
+        "ciHigh": 164
+      },
+      "p95Ms": {
+        "median": 286,
+        "ciLow": 271,
+        "ciHigh": 302
+      },
+      "p99Ms": {
+        "median": 359,
+        "ciLow": 316,
+        "ciHigh": 398
+      },
+      "allP50Ms": {
+        "median": 150,
+        "ciLow": 145,
+        "ciHigh": 164
+      },
+      "allP99Ms": {
+        "median": 359,
+        "ciLow": 316,
+        "ciHigh": 398
+      },
+      "retries": {
+        "median": 0,
+        "ciLow": 0,
+        "ciHigh": 0
+      },
+      "unavailable503": {
+        "median": 0,
+        "ciLow": 0,
+        "ciHigh": 0
+      },
+      "deadlocks": {
+        "median": 0,
+        "ciLow": 0,
+        "ciHigh": 0
+      },
+      "peakPlatformThreads": {
+        "median": 22,
+        "ciLow": 22,
+        "ciHigh": 22
+      },
+      "peakHeapMb": {
+        "median": 661,
+        "ciLow": 637,
+        "ciHigh": 671
+      },
+      "meanAppCpu": {
+        "median": 0.26,
+        "ciLow": 0.26,
+        "ciHigh": 0.27
+      },
+      "meanLoadGeneratorCpu": {
+        "median": 0.06,
+        "ciLow": 0.06,
+        "ciHigh": 0.06
+      }
+    },
+    "strategy-conditional-update-hot90-u256-virtual": {
+      "grid": "strategy",
+      "strategy": "conditional-update",
+      "hotShare": 0.9,
+      "users": 256,
+      "threads": "virtual",
+      "repetitions": 5,
+      "createdPerSecond": {
+        "median": 983.14,
+        "ciLow": 964.48,
+        "ciHigh": 1018.56
+      },
+      "p50Ms": {
+        "median": 257,
+        "ciLow": 246,
+        "ciHigh": 259
+      },
+      "p95Ms": {
+        "median": 296,
+        "ciLow": 290,
+        "ciHigh": 310
+      },
+      "p99Ms": {
+        "median": 337,
+        "ciLow": 324,
+        "ciHigh": 369
+      },
+      "allP50Ms": {
+        "median": 257,
+        "ciLow": 246,
+        "ciHigh": 259
+      },
+      "allP99Ms": {
+        "median": 337,
+        "ciLow": 324,
+        "ciHigh": 369
+      },
+      "retries": {
+        "median": 0,
+        "ciLow": 0,
+        "ciHigh": 0
+      },
+      "unavailable503": {
+        "median": 0,
+        "ciLow": 0,
+        "ciHigh": 0
+      },
+      "deadlocks": {
+        "median": 0,
+        "ciLow": 0,
+        "ciHigh": 0
+      },
+      "peakPlatformThreads": {
+        "median": 22,
+        "ciLow": 22,
+        "ciHigh": 22
+      },
+      "peakHeapMb": {
+        "median": 666,
+        "ciLow": 661,
+        "ciHigh": 669
+      },
+      "meanAppCpu": {
+        "median": 0.22,
+        "ciLow": 0.22,
+        "ciHigh": 0.22
+      },
+      "meanLoadGeneratorCpu": {
+        "median": 0.04,
+        "ciLow": 0.04,
+        "ciHigh": 0.04
+      }
+    },
+    "strategy-optimistic-hot00-u256-virtual": {
+      "grid": "strategy",
+      "strategy": "optimistic",
+      "hotShare": 0.0,
+      "users": 256,
+      "threads": "virtual",
+      "repetitions": 5,
+      "createdPerSecond": {
+        "median": 1812.54,
+        "ciLow": 1715.52,
+        "ciHigh": 1899.85
+      },
+      "p50Ms": {
+        "median": 136,
+        "ciLow": 129,
+        "ciHigh": 143
+      },
+      "p95Ms": {
+        "median": 271,
+        "ciLow": 261,
+        "ciHigh": 289
+      },
+      "p99Ms": {
+        "median": 391,
+        "ciLow": 371,
+        "ciHigh": 419
+      },
+      "allP50Ms": {
+        "median": 136,
+        "ciLow": 129,
+        "ciHigh": 143
+      },
+      "allP99Ms": {
+        "median": 391,
+        "ciLow": 371,
+        "ciHigh": 419
+      },
+      "retries": {
+        "median": 2833,
+        "ciLow": 2664,
+        "ciHigh": 2955
+      },
+      "unavailable503": {
+        "median": 0,
+        "ciLow": 0,
+        "ciHigh": 0
+      },
+      "deadlocks": {
+        "median": 0,
+        "ciLow": 0,
+        "ciHigh": 0
+      },
+      "peakPlatformThreads": {
+        "median": 22,
+        "ciLow": 22,
+        "ciHigh": 22
+      },
+      "peakHeapMb": {
+        "median": 666,
+        "ciLow": 653,
+        "ciHigh": 668
+      },
+      "meanAppCpu": {
+        "median": 0.27,
+        "ciLow": 0.26,
+        "ciHigh": 0.27
+      },
+      "meanLoadGeneratorCpu": {
+        "median": 0.06,
+        "ciLow": 0.06,
+        "ciHigh": 0.06
+      }
+    },
+    "strategy-optimistic-hot30-u256-virtual": {
+      "grid": "strategy",
+      "strategy": "optimistic",
+      "hotShare": 0.3,
+      "users": 256,
+      "threads": "virtual",
+      "repetitions": 5,
+      "createdPerSecond": {
+        "median": 1043.07,
+        "ciLow": 939.96,
+        "ciHigh": 1045.59
+      },
+      "p50Ms": {
+        "median": 126,
+        "ciLow": 125,
+        "ciHigh": 136
+      },
+      "p95Ms": {
+        "median": 487,
+        "ciLow": 484,
+        "ciHigh": 536
+      },
+      "p99Ms": {
+        "median": 676,
+        "ciLow": 665,
+        "ciHigh": 726
+      },
+      "allP50Ms": {
+        "median": 129,
+        "ciLow": 128,
+        "ciHigh": 138
+      },
+      "allP99Ms": {
+        "median": 795,
+        "ciLow": 780,
+        "ciHigh": 857
+      },
+      "retries": {
+        "median": 52480,
+        "ciLow": 48858,
+        "ciHigh": 53237
+      },
+      "unavailable503": {
+        "median": 7454,
+        "ciLow": 7004,
+        "ciHigh": 7589
+      },
+      "deadlocks": {
+        "median": 0,
+        "ciLow": 0,
+        "ciHigh": 0
+      },
+      "peakPlatformThreads": {
+        "median": 22,
+        "ciLow": 22,
+        "ciHigh": 22
+      },
+      "peakHeapMb": {
+        "median": 660,
+        "ciLow": 651,
+        "ciHigh": 663
+      },
+      "meanAppCpu": {
+        "median": 0.27,
+        "ciLow": 0.27,
+        "ciHigh": 0.29
+      },
+      "meanLoadGeneratorCpu": {
+        "median": 0.05,
+        "ciLow": 0.05,
+        "ciHigh": 0.05
+      }
+    },
+    "strategy-optimistic-hot90-u256-virtual": {
+      "grid": "strategy",
+      "strategy": "optimistic",
+      "hotShare": 0.9,
+      "users": 256,
+      "threads": "virtual",
+      "repetitions": 5,
+      "createdPerSecond": {
+        "median": 292.01,
+        "ciLow": 274.79,
+        "ciHigh": 320.99
+      },
+      "p50Ms": {
+        "median": 248,
+        "ciLow": 228,
+        "ciHigh": 261
+      },
+      "p95Ms": {
+        "median": 637,
+        "ciLow": 589,
+        "ciHigh": 680
+      },
+      "p99Ms": {
+        "median": 745,
+        "ciLow": 699,
+        "ciHigh": 845
+      },
+      "allP50Ms": {
+        "median": 516,
+        "ciLow": 475,
+        "ciHigh": 547
+      },
+      "allP99Ms": {
+        "median": 834,
+        "ciLow": 782,
+        "ciHigh": 947
+      },
+      "retries": {
+        "median": 89538,
+        "ciLow": 84131,
+        "ciHigh": 97638
+      },
+      "unavailable503": {
+        "median": 16158,
+        "ciLow": 15074,
+        "ciHigh": 17496
+      },
+      "deadlocks": {
+        "median": 0,
+        "ciLow": 0,
+        "ciHigh": 0
+      },
+      "peakPlatformThreads": {
+        "median": 22,
+        "ciLow": 22,
+        "ciHigh": 22
+      },
+      "peakHeapMb": {
+        "median": 661,
+        "ciLow": 653,
+        "ciHigh": 664
+      },
+      "meanAppCpu": {
+        "median": 0.27,
+        "ciLow": 0.27,
+        "ciHigh": 0.28
+      },
+      "meanLoadGeneratorCpu": {
+        "median": 0.03,
+        "ciLow": 0.03,
+        "ciHigh": 0.05
+      }
+    },
+    "strategy-pessimistic-hot00-u256-virtual": {
+      "grid": "strategy",
+      "strategy": "pessimistic",
+      "hotShare": 0.0,
+      "users": 256,
+      "threads": "virtual",
+      "repetitions": 5,
+      "createdPerSecond": {
+        "median": 1878.39,
+        "ciLow": 1765.39,
+        "ciHigh": 1931.47
+      },
+      "p50Ms": {
+        "median": 133,
+        "ciLow": 130,
+        "ciHigh": 143
+      },
+      "p95Ms": {
+        "median": 267,
+        "ciLow": 259,
+        "ciHigh": 284
+      },
+      "p99Ms": {
+        "median": 380,
+        "ciLow": 369,
+        "ciHigh": 405
+      },
+      "allP50Ms": {
+        "median": 133,
+        "ciLow": 130,
+        "ciHigh": 143
+      },
+      "allP99Ms": {
+        "median": 380,
+        "ciLow": 369,
+        "ciHigh": 405
+      },
+      "retries": {
+        "median": 0,
+        "ciLow": 0,
+        "ciHigh": 0
+      },
+      "unavailable503": {
+        "median": 0,
+        "ciLow": 0,
+        "ciHigh": 0
+      },
+      "deadlocks": {
+        "median": 0,
+        "ciLow": 0,
+        "ciHigh": 0
+      },
+      "peakPlatformThreads": {
+        "median": 22,
+        "ciLow": 22,
+        "ciHigh": 22
+      },
+      "peakHeapMb": {
+        "median": 660,
+        "ciLow": 651,
+        "ciHigh": 676
+      },
+      "meanAppCpu": {
+        "median": 0.27,
+        "ciLow": 0.27,
+        "ciHigh": 0.27
+      },
+      "meanLoadGeneratorCpu": {
+        "median": 0.06,
+        "ciLow": 0.06,
+        "ciHigh": 0.06
+      }
+    },
+    "strategy-pessimistic-hot30-u256-virtual": {
+      "grid": "strategy",
+      "strategy": "pessimistic",
+      "hotShare": 0.3,
+      "users": 256,
+      "threads": "virtual",
+      "repetitions": 5,
+      "createdPerSecond": {
+        "median": 1457.53,
+        "ciLow": 1349.63,
+        "ciHigh": 1460.75
+      },
+      "p50Ms": {
+        "median": 172,
+        "ciLow": 168,
+        "ciHigh": 186
+      },
+      "p95Ms": {
+        "median": 311,
+        "ciLow": 307,
+        "ciHigh": 331
+      },
+      "p99Ms": {
+        "median": 395,
+        "ciLow": 370,
+        "ciHigh": 403
+      },
+      "allP50Ms": {
+        "median": 172,
+        "ciLow": 168,
+        "ciHigh": 186
+      },
+      "allP99Ms": {
+        "median": 395,
+        "ciLow": 370,
+        "ciHigh": 403
+      },
+      "retries": {
+        "median": 0,
+        "ciLow": 0,
+        "ciHigh": 0
+      },
+      "unavailable503": {
+        "median": 0,
+        "ciLow": 0,
+        "ciHigh": 0
+      },
+      "deadlocks": {
+        "median": 0,
+        "ciLow": 0,
+        "ciHigh": 0
+      },
+      "peakPlatformThreads": {
+        "median": 22,
+        "ciLow": 22,
+        "ciHigh": 22
+      },
+      "peakHeapMb": {
+        "median": 665,
+        "ciLow": 661,
+        "ciHigh": 671
+      },
+      "meanAppCpu": {
+        "median": 0.26,
+        "ciLow": 0.26,
+        "ciHigh": 0.26
+      },
+      "meanLoadGeneratorCpu": {
+        "median": 0.05,
+        "ciLow": 0.05,
+        "ciHigh": 0.05
+      }
+    },
+    "strategy-pessimistic-hot90-u256-virtual": {
+      "grid": "strategy",
+      "strategy": "pessimistic",
+      "hotShare": 0.9,
+      "users": 256,
+      "threads": "virtual",
+      "repetitions": 5,
+      "createdPerSecond": {
+        "median": 767.83,
+        "ciLow": 757.28,
+        "ciHigh": 857.29
+      },
+      "p50Ms": {
+        "median": 329,
+        "ciLow": 295,
+        "ciHigh": 333
+      },
+      "p95Ms": {
+        "median": 370,
+        "ciLow": 324,
+        "ciHigh": 377
+      },
+      "p99Ms": {
+        "median": 416,
+        "ciLow": 350,
+        "ciHigh": 473
+      },
+      "allP50Ms": {
+        "median": 329,
+        "ciLow": 295,
+        "ciHigh": 333
+      },
+      "allP99Ms": {
+        "median": 416,
+        "ciLow": 350,
+        "ciHigh": 473
+      },
+      "retries": {
+        "median": 0,
+        "ciLow": 0,
+        "ciHigh": 0
+      },
+      "unavailable503": {
+        "median": 0,
+        "ciLow": 0,
+        "ciHigh": 0
+      },
+      "deadlocks": {
+        "median": 0,
+        "ciLow": 0,
+        "ciHigh": 0
+      },
+      "peakPlatformThreads": {
+        "median": 22,
+        "ciLow": 22,
+        "ciHigh": 22
+      },
+      "peakHeapMb": {
+        "median": 667,
+        "ciLow": 662,
+        "ciHigh": 668
+      },
+      "meanAppCpu": {
+        "median": 0.21,
+        "ciLow": 0.2,
+        "ciHigh": 0.21
+      },
+      "meanLoadGeneratorCpu": {
+        "median": 0.03,
+        "ciLow": 0.03,
+        "ciHigh": 0.03
+      }
+    },
+    "strategy-serializable-hot00-u256-virtual": {
+      "grid": "strategy",
+      "strategy": "serializable",
+      "hotShare": 0.0,
+      "users": 256,
+      "threads": "virtual",
+      "repetitions": 5,
+      "createdPerSecond": {
+        "median": 1557.03,
+        "ciLow": 1453.27,
+        "ciHigh": 1584.39
+      },
+      "p50Ms": {
+        "median": 154,
+        "ciLow": 153,
+        "ciHigh": 166
+      },
+      "p95Ms": {
+        "median": 310,
+        "ciLow": 308,
+        "ciHigh": 337
+      },
+      "p99Ms": {
+        "median": 446,
+        "ciLow": 436,
+        "ciHigh": 464
+      },
+      "allP50Ms": {
+        "median": 154,
+        "ciLow": 153,
+        "ciHigh": 166
+      },
+      "allP99Ms": {
+        "median": 446,
+        "ciLow": 436,
+        "ciHigh": 464
+      },
+      "retries": {
+        "median": 3266,
+        "ciLow": 3050,
+        "ciHigh": 3364
+      },
+      "unavailable503": {
+        "median": 0,
+        "ciLow": 0,
+        "ciHigh": 0
+      },
+      "deadlocks": {
+        "median": 0,
+        "ciLow": 0,
+        "ciHigh": 0
+      },
+      "peakPlatformThreads": {
+        "median": 22,
+        "ciLow": 22,
+        "ciHigh": 22
+      },
+      "peakHeapMb": {
+        "median": 665,
+        "ciLow": 657,
+        "ciHigh": 671
+      },
+      "meanAppCpu": {
+        "median": 0.26,
+        "ciLow": 0.26,
+        "ciHigh": 0.27
+      },
+      "meanLoadGeneratorCpu": {
+        "median": 0.05,
+        "ciLow": 0.05,
+        "ciHigh": 0.06
+      }
+    },
+    "strategy-serializable-hot30-u256-virtual": {
+      "grid": "strategy",
+      "strategy": "serializable",
+      "hotShare": 0.3,
+      "users": 256,
+      "threads": "virtual",
+      "repetitions": 5,
+      "createdPerSecond": {
+        "median": 808.07,
+        "ciLow": 800.53,
+        "ciHigh": 822.44
+      },
+      "p50Ms": {
+        "median": 159,
+        "ciLow": 157,
+        "ciHigh": 161
+      },
+      "p95Ms": {
+        "median": 622,
+        "ciLow": 605,
+        "ciHigh": 624
+      },
+      "p99Ms": {
+        "median": 830,
+        "ciLow": 816,
+        "ciHigh": 848
+      },
+      "allP50Ms": {
+        "median": 163,
+        "ciLow": 160,
+        "ciHigh": 164
+      },
+      "allP99Ms": {
+        "median": 981,
+        "ciLow": 967,
+        "ciHigh": 1000
+      },
+      "retries": {
+        "median": 41517,
+        "ciLow": 41233,
+        "ciHigh": 42738
+      },
+      "unavailable503": {
+        "median": 6057,
+        "ciLow": 6006,
+        "ciHigh": 6203
+      },
+      "deadlocks": {
+        "median": 0,
+        "ciLow": 0,
+        "ciHigh": 0
+      },
+      "peakPlatformThreads": {
+        "median": 22,
+        "ciLow": 22,
+        "ciHigh": 22
+      },
+      "peakHeapMb": {
+        "median": 663,
+        "ciLow": 659,
+        "ciHigh": 666
+      },
+      "meanAppCpu": {
+        "median": 0.26,
+        "ciLow": 0.26,
+        "ciHigh": 0.27
+      },
+      "meanLoadGeneratorCpu": {
+        "median": 0.04,
+        "ciLow": 0.04,
+        "ciHigh": 0.04
+      }
+    },
+    "strategy-serializable-hot90-u256-virtual": {
+      "grid": "strategy",
+      "strategy": "serializable",
+      "hotShare": 0.9,
+      "users": 256,
+      "threads": "virtual",
+      "repetitions": 5,
+      "createdPerSecond": {
+        "median": 228.3,
+        "ciLow": 175.55,
+        "ciHigh": 244.39
+      },
+      "p50Ms": {
+        "median": 307,
+        "ciLow": 292,
+        "ciHigh": 405
+      },
+      "p95Ms": {
+        "median": 792,
+        "ciLow": 743,
+        "ciHigh": 1025
+      },
+      "p99Ms": {
+        "median": 917,
+        "ciLow": 875,
+        "ciHigh": 1207
+      },
+      "allP50Ms": {
+        "median": 665,
+        "ciLow": 623,
+        "ciHigh": 848
+      },
+      "allP99Ms": {
+        "median": 1031,
+        "ciLow": 957,
+        "ciHigh": 1372
+      },
+      "retries": {
+        "median": 72627,
+        "ciLow": 55969,
+        "ciHigh": 76384
+      },
+      "unavailable503": {
+        "median": 13186,
+        "ciLow": 10195,
+        "ciHigh": 13845
+      },
+      "deadlocks": {
+        "median": 0,
+        "ciLow": 0,
+        "ciHigh": 0
+      },
+      "peakPlatformThreads": {
+        "median": 22,
+        "ciLow": 22,
+        "ciHigh": 22
+      },
+      "peakHeapMb": {
+        "median": 663,
+        "ciLow": 648,
+        "ciHigh": 667
+      },
+      "meanAppCpu": {
+        "median": 0.26,
+        "ciLow": 0.26,
+        "ciHigh": 0.26
+      },
+      "meanLoadGeneratorCpu": {
+        "median": 0.03,
+        "ciLow": 0.03,
+        "ciHigh": 0.04
+      }
+    },
+    "threads-pessimistic-hot00-u1024-platform": {
+      "grid": "threads",
+      "strategy": "pessimistic",
+      "hotShare": 0.0,
+      "users": 1024,
+      "threads": "platform",
+      "repetitions": 5,
+      "createdPerSecond": {
+        "median": 1776.0,
+        "ciLow": 1759.04,
+        "ciHigh": 1893.17
+      },
+      "p50Ms": {
+        "median": 601,
+        "ciLow": 577,
+        "ciHigh": 612
+      },
+      "p95Ms": {
+        "median": 862,
+        "ciLow": 814,
+        "ciHigh": 893
+      },
+      "p99Ms": {
+        "median": 1011,
+        "ciLow": 946,
+        "ciHigh": 1061
+      },
+      "allP50Ms": {
+        "median": 601,
+        "ciLow": 577,
+        "ciHigh": 612
+      },
+      "allP99Ms": {
+        "median": 1011,
+        "ciLow": 946,
+        "ciHigh": 1061
+      },
+      "retries": {
+        "median": 0,
+        "ciLow": 0,
+        "ciHigh": 0
+      },
+      "unavailable503": {
+        "median": 0,
+        "ciLow": 0,
+        "ciHigh": 0
+      },
+      "deadlocks": {
+        "median": 0,
+        "ciLow": 0,
+        "ciHigh": 0
+      },
+      "peakPlatformThreads": {
+        "median": 215,
+        "ciLow": 215,
+        "ciHigh": 215
+      },
+      "peakHeapMb": {
+        "median": 662,
+        "ciLow": 626,
+        "ciHigh": 672
+      },
+      "meanAppCpu": {
+        "median": 0.24,
+        "ciLow": 0.24,
+        "ciHigh": 0.25
+      },
+      "meanLoadGeneratorCpu": {
+        "median": 0.07,
+        "ciLow": 0.07,
+        "ciHigh": 0.07
+      }
+    },
+    "threads-pessimistic-hot00-u1024-virtual": {
+      "grid": "threads",
+      "strategy": "pessimistic",
+      "hotShare": 0.0,
+      "users": 1024,
+      "threads": "virtual",
+      "repetitions": 5,
+      "createdPerSecond": {
+        "median": 1906.01,
+        "ciLow": 1757.98,
+        "ciHigh": 1927.58
+      },
+      "p50Ms": {
+        "median": 526,
+        "ciLow": 523,
+        "ciHigh": 565
+      },
+      "p95Ms": {
+        "median": 1062,
+        "ciLow": 1053,
+        "ciHigh": 1147
+      },
+      "p99Ms": {
+        "median": 1550,
+        "ciLow": 1533,
+        "ciHigh": 1656
+      },
+      "allP50Ms": {
+        "median": 526,
+        "ciLow": 523,
+        "ciHigh": 565
+      },
+      "allP99Ms": {
+        "median": 1550,
+        "ciLow": 1533,
+        "ciHigh": 1656
+      },
+      "retries": {
+        "median": 0,
+        "ciLow": 0,
+        "ciHigh": 0
+      },
+      "unavailable503": {
+        "median": 0,
+        "ciLow": 0,
+        "ciHigh": 0
+      },
+      "deadlocks": {
+        "median": 0,
+        "ciLow": 0,
+        "ciHigh": 0
+      },
+      "peakPlatformThreads": {
+        "median": 22,
+        "ciLow": 22,
+        "ciHigh": 22
+      },
+      "peakHeapMb": {
+        "median": 831,
+        "ciLow": 828,
+        "ciHigh": 839
+      },
+      "meanAppCpu": {
+        "median": 0.27,
+        "ciLow": 0.27,
+        "ciHigh": 0.27
+      },
+      "meanLoadGeneratorCpu": {
+        "median": 0.07,
+        "ciLow": 0.06,
+        "ciHigh": 0.07
+      }
+    },
+    "threads-pessimistic-hot00-u64-platform": {
+      "grid": "threads",
+      "strategy": "pessimistic",
+      "hotShare": 0.0,
+      "users": 64,
+      "threads": "platform",
+      "repetitions": 5,
+      "createdPerSecond": {
+        "median": 1934.37,
+        "ciLow": 1536.25,
+        "ciHigh": 2040.47
+      },
+      "p50Ms": {
+        "median": 32,
+        "ciLow": 30,
+        "ciHigh": 39
+      },
+      "p95Ms": {
+        "median": 64,
+        "ciLow": 60,
+        "ciHigh": 83
+      },
+      "p99Ms": {
+        "median": 90,
+        "ciLow": 86,
+        "ciHigh": 118
+      },
+      "allP50Ms": {
+        "median": 32,
+        "ciLow": 30,
+        "ciHigh": 39
+      },
+      "allP99Ms": {
+        "median": 90,
+        "ciLow": 86,
+        "ciHigh": 118
+      },
+      "retries": {
+        "median": 0,
+        "ciLow": 0,
+        "ciHigh": 0
+      },
+      "unavailable503": {
+        "median": 0,
+        "ciLow": 0,
+        "ciHigh": 0
+      },
+      "deadlocks": {
+        "median": 0,
+        "ciLow": 0,
+        "ciHigh": 0
+      },
+      "peakPlatformThreads": {
+        "median": 87,
+        "ciLow": 84,
+        "ciHigh": 88
+      },
+      "peakHeapMb": {
+        "median": 629,
+        "ciLow": 614,
+        "ciHigh": 646
+      },
+      "meanAppCpu": {
+        "median": 0.26,
+        "ciLow": 0.25,
+        "ciHigh": 0.26
+      },
+      "meanLoadGeneratorCpu": {
+        "median": 0.06,
+        "ciLow": 0.06,
+        "ciHigh": 0.06
+      }
+    },
+    "threads-pessimistic-hot00-u64-virtual": {
+      "grid": "threads",
+      "strategy": "pessimistic",
+      "hotShare": 0.0,
+      "users": 64,
+      "threads": "virtual",
+      "repetitions": 5,
+      "createdPerSecond": {
+        "median": 1967.4,
+        "ciLow": 1746.14,
+        "ciHigh": 2045.72
+      },
+      "p50Ms": {
+        "median": 32,
+        "ciLow": 31,
+        "ciHigh": 36
+      },
+      "p95Ms": {
+        "median": 59,
+        "ciLow": 57,
+        "ciHigh": 66
+      },
+      "p99Ms": {
+        "median": 81,
+        "ciLow": 73,
+        "ciHigh": 93
+      },
+      "allP50Ms": {
+        "median": 32,
+        "ciLow": 31,
+        "ciHigh": 36
+      },
+      "allP99Ms": {
+        "median": 81,
+        "ciLow": 73,
+        "ciHigh": 93
+      },
+      "retries": {
+        "median": 0,
+        "ciLow": 0,
+        "ciHigh": 0
+      },
+      "unavailable503": {
+        "median": 0,
+        "ciLow": 0,
+        "ciHigh": 0
+      },
+      "deadlocks": {
+        "median": 0,
+        "ciLow": 0,
+        "ciHigh": 0
+      },
+      "peakPlatformThreads": {
+        "median": 22,
+        "ciLow": 22,
+        "ciHigh": 22
+      },
+      "peakHeapMb": {
+        "median": 637,
+        "ciLow": 629,
+        "ciHigh": 654
+      },
+      "meanAppCpu": {
+        "median": 0.27,
+        "ciLow": 0.27,
+        "ciHigh": 0.27
+      },
+      "meanLoadGeneratorCpu": {
+        "median": 0.05,
+        "ciLow": 0.05,
+        "ciHigh": 0.06
+      }
+    },
+    "threads-pessimistic-hot30-u1024-platform": {
+      "grid": "threads",
+      "strategy": "pessimistic",
+      "hotShare": 0.3,
+      "users": 1024,
+      "threads": "platform",
+      "repetitions": 5,
+      "createdPerSecond": {
+        "median": 1505.09,
+        "ciLow": 1366.09,
+        "ciHigh": 1533.74
+      },
+      "p50Ms": {
+        "median": 731,
+        "ciLow": 721,
+        "ciHigh": 800
+      },
+      "p95Ms": {
+        "median": 930,
+        "ciLow": 912,
+        "ciHigh": 1073
+      },
+      "p99Ms": {
+        "median": 1060,
+        "ciLow": 1020,
+        "ciHigh": 1206
+      },
+      "allP50Ms": {
+        "median": 731,
+        "ciLow": 721,
+        "ciHigh": 800
+      },
+      "allP99Ms": {
+        "median": 1060,
+        "ciLow": 1020,
+        "ciHigh": 1206
+      },
+      "retries": {
+        "median": 0,
+        "ciLow": 0,
+        "ciHigh": 0
+      },
+      "unavailable503": {
+        "median": 0,
+        "ciLow": 0,
+        "ciHigh": 0
+      },
+      "deadlocks": {
+        "median": 0,
+        "ciLow": 0,
+        "ciHigh": 0
+      },
+      "peakPlatformThreads": {
+        "median": 215,
+        "ciLow": 215,
+        "ciHigh": 215
+      },
+      "peakHeapMb": {
+        "median": 674,
+        "ciLow": 659,
+        "ciHigh": 680
+      },
+      "meanAppCpu": {
+        "median": 0.2,
+        "ciLow": 0.2,
+        "ciHigh": 0.2
+      },
+      "meanLoadGeneratorCpu": {
+        "median": 0.06,
+        "ciLow": 0.06,
+        "ciHigh": 0.06
+      }
+    },
+    "threads-pessimistic-hot30-u1024-virtual": {
+      "grid": "threads",
+      "strategy": "pessimistic",
+      "hotShare": 0.3,
+      "users": 1024,
+      "threads": "virtual",
+      "repetitions": 5,
+      "createdPerSecond": {
+        "median": 1402.63,
+        "ciLow": 1301.62,
+        "ciHigh": 1517.96
+      },
+      "p50Ms": {
+        "median": 717,
+        "ciLow": 656,
+        "ciHigh": 770
+      },
+      "p95Ms": {
+        "median": 1313,
+        "ciLow": 1211,
+        "ciHigh": 1452
+      },
+      "p99Ms": {
+        "median": 1541,
+        "ciLow": 1382,
+        "ciHigh": 1823
+      },
+      "allP50Ms": {
+        "median": 717,
+        "ciLow": 656,
+        "ciHigh": 770
+      },
+      "allP99Ms": {
+        "median": 1541,
+        "ciLow": 1382,
+        "ciHigh": 1823
+      },
+      "retries": {
+        "median": 0,
+        "ciLow": 0,
+        "ciHigh": 0
+      },
+      "unavailable503": {
+        "median": 0,
+        "ciLow": 0,
+        "ciHigh": 0
+      },
+      "deadlocks": {
+        "median": 0,
+        "ciLow": 0,
+        "ciHigh": 0
+      },
+      "peakPlatformThreads": {
+        "median": 22,
+        "ciLow": 22,
+        "ciHigh": 22
+      },
+      "peakHeapMb": {
+        "median": 840,
+        "ciLow": 818,
+        "ciHigh": 844
+      },
+      "meanAppCpu": {
+        "median": 0.26,
+        "ciLow": 0.26,
+        "ciHigh": 0.26
+      },
+      "meanLoadGeneratorCpu": {
+        "median": 0.05,
+        "ciLow": 0.05,
+        "ciHigh": 0.06
+      }
+    },
+    "threads-pessimistic-hot30-u64-platform": {
+      "grid": "threads",
+      "strategy": "pessimistic",
+      "hotShare": 0.3,
+      "users": 64,
+      "threads": "platform",
+      "repetitions": 5,
+      "createdPerSecond": {
+        "median": 1584.92,
+        "ciLow": 1136.78,
+        "ciHigh": 1648.52
+      },
+      "p50Ms": {
+        "median": 38,
+        "ciLow": 36,
+        "ciHigh": 53
+      },
+      "p95Ms": {
+        "median": 72,
+        "ciLow": 68,
+        "ciHigh": 101
+      },
+      "p99Ms": {
+        "median": 93,
+        "ciLow": 88,
+        "ciHigh": 132
+      },
+      "allP50Ms": {
+        "median": 38,
+        "ciLow": 36,
+        "ciHigh": 53
+      },
+      "allP99Ms": {
+        "median": 93,
+        "ciLow": 88,
+        "ciHigh": 132
+      },
+      "retries": {
+        "median": 0,
+        "ciLow": 0,
+        "ciHigh": 0
+      },
+      "unavailable503": {
+        "median": 0,
+        "ciLow": 0,
+        "ciHigh": 0
+      },
+      "deadlocks": {
+        "median": 0,
+        "ciLow": 0,
+        "ciHigh": 0
+      },
+      "peakPlatformThreads": {
+        "median": 87,
+        "ciLow": 85,
+        "ciHigh": 89
+      },
+      "peakHeapMb": {
+        "median": 643,
+        "ciLow": 618,
+        "ciHigh": 651
+      },
+      "meanAppCpu": {
+        "median": 0.21,
+        "ciLow": 0.21,
+        "ciHigh": 0.22
+      },
+      "meanLoadGeneratorCpu": {
+        "median": 0.05,
+        "ciLow": 0.04,
+        "ciHigh": 0.05
+      }
+    },
+    "threads-pessimistic-hot30-u64-virtual": {
+      "grid": "threads",
+      "strategy": "pessimistic",
+      "hotShare": 0.3,
+      "users": 64,
+      "threads": "virtual",
+      "repetitions": 5,
+      "createdPerSecond": {
+        "median": 1474.85,
+        "ciLow": 1440.79,
+        "ciHigh": 1544.03
+      },
+      "p50Ms": {
+        "median": 41,
+        "ciLow": 39,
+        "ciHigh": 42
+      },
+      "p95Ms": {
+        "median": 72,
+        "ciLow": 68,
+        "ciHigh": 73
+      },
+      "p99Ms": {
+        "median": 94,
+        "ciLow": 89,
+        "ciHigh": 97
+      },
+      "allP50Ms": {
+        "median": 41,
+        "ciLow": 39,
+        "ciHigh": 42
+      },
+      "allP99Ms": {
+        "median": 94,
+        "ciLow": 89,
+        "ciHigh": 97
+      },
+      "retries": {
+        "median": 0,
+        "ciLow": 0,
+        "ciHigh": 0
+      },
+      "unavailable503": {
+        "median": 0,
+        "ciLow": 0,
+        "ciHigh": 0
+      },
+      "deadlocks": {
+        "median": 0,
+        "ciLow": 0,
+        "ciHigh": 0
+      },
+      "peakPlatformThreads": {
+        "median": 22,
+        "ciLow": 22,
+        "ciHigh": 22
+      },
+      "peakHeapMb": {
+        "median": 628,
+        "ciLow": 613,
+        "ciHigh": 649
+      },
+      "meanAppCpu": {
+        "median": 0.26,
+        "ciLow": 0.26,
+        "ciHigh": 0.27
+      },
+      "meanLoadGeneratorCpu": {
+        "median": 0.05,
+        "ciLow": 0.04,
+        "ciHigh": 0.05
+      }
+    },
+    "threads-pessimistic-hot90-u1024-platform": {
+      "grid": "threads",
+      "strategy": "pessimistic",
+      "hotShare": 0.9,
+      "users": 1024,
+      "threads": "platform",
+      "repetitions": 5,
+      "createdPerSecond": {
+        "median": 927.43,
+        "ciLow": 906.5,
+        "ciHigh": 973.7
+      },
+      "p50Ms": {
+        "median": 1183,
+        "ciLow": 1112,
+        "ciHigh": 1195
+      },
+      "p95Ms": {
+        "median": 1415,
+        "ciLow": 1341,
+        "ciHigh": 1454
+      },
+      "p99Ms": {
+        "median": 1498,
+        "ciLow": 1424,
+        "ciHigh": 1571
+      },
+      "allP50Ms": {
+        "median": 1183,
+        "ciLow": 1112,
+        "ciHigh": 1195
+      },
+      "allP99Ms": {
+        "median": 1498,
+        "ciLow": 1424,
+        "ciHigh": 1571
+      },
+      "retries": {
+        "median": 0,
+        "ciLow": 0,
+        "ciHigh": 0
+      },
+      "unavailable503": {
+        "median": 0,
+        "ciLow": 0,
+        "ciHigh": 0
+      },
+      "deadlocks": {
+        "median": 0,
+        "ciLow": 0,
+        "ciHigh": 0
+      },
+      "peakPlatformThreads": {
+        "median": 215,
+        "ciLow": 215,
+        "ciHigh": 215
+      },
+      "peakHeapMb": {
+        "median": 666,
+        "ciLow": 657,
+        "ciHigh": 677
+      },
+      "meanAppCpu": {
+        "median": 0.14,
+        "ciLow": 0.13,
+        "ciHigh": 0.14
+      },
+      "meanLoadGeneratorCpu": {
+        "median": 0.04,
+        "ciLow": 0.04,
+        "ciHigh": 0.04
+      }
+    },
+    "threads-pessimistic-hot90-u1024-virtual": {
+      "grid": "threads",
+      "strategy": "pessimistic",
+      "hotShare": 0.9,
+      "users": 1024,
+      "threads": "virtual",
+      "repetitions": 5,
+      "createdPerSecond": {
+        "median": 735.98,
+        "ciLow": 553.77,
+        "ciHigh": 815.98
+      },
+      "p50Ms": {
+        "median": 1369,
+        "ciLow": 1221,
+        "ciHigh": 1848
+      },
+      "p95Ms": {
+        "median": 1486,
+        "ciLow": 1317,
+        "ciHigh": 1988
+      },
+      "p99Ms": {
+        "median": 1600,
+        "ciLow": 1366,
+        "ciHigh": 2116
+      },
+      "allP50Ms": {
+        "median": 1369,
+        "ciLow": 1221,
+        "ciHigh": 1848
+      },
+      "allP99Ms": {
+        "median": 1600,
+        "ciLow": 1366,
+        "ciHigh": 2116
+      },
+      "retries": {
+        "median": 0,
+        "ciLow": 0,
+        "ciHigh": 0
+      },
+      "unavailable503": {
+        "median": 0,
+        "ciLow": 0,
+        "ciHigh": 0
+      },
+      "deadlocks": {
+        "median": 0,
+        "ciLow": 0,
+        "ciHigh": 0
+      },
+      "peakPlatformThreads": {
+        "median": 22,
+        "ciLow": 22,
+        "ciHigh": 22
+      },
+      "peakHeapMb": {
+        "median": 832,
+        "ciLow": 821,
+        "ciHigh": 841
+      },
+      "meanAppCpu": {
+        "median": 0.21,
+        "ciLow": 0.2,
+        "ciHigh": 0.21
+      },
+      "meanLoadGeneratorCpu": {
+        "median": 0.04,
+        "ciLow": 0.04,
+        "ciHigh": 0.04
+      }
+    },
+    "threads-pessimistic-hot90-u64-platform": {
+      "grid": "threads",
+      "strategy": "pessimistic",
+      "hotShare": 0.9,
+      "users": 64,
+      "threads": "platform",
+      "repetitions": 5,
+      "createdPerSecond": {
+        "median": 874.05,
+        "ciLow": 646.63,
+        "ciHigh": 955.73
+      },
+      "p50Ms": {
+        "median": 72,
+        "ciLow": 66,
+        "ciHigh": 97
+      },
+      "p95Ms": {
+        "median": 89,
+        "ciLow": 82,
+        "ciHigh": 129
+      },
+      "p99Ms": {
+        "median": 130,
+        "ciLow": 119,
+        "ciHigh": 176
+      },
+      "allP50Ms": {
+        "median": 72,
+        "ciLow": 66,
+        "ciHigh": 97
+      },
+      "allP99Ms": {
+        "median": 130,
+        "ciLow": 119,
+        "ciHigh": 176
+      },
+      "retries": {
+        "median": 0,
+        "ciLow": 0,
+        "ciHigh": 0
+      },
+      "unavailable503": {
+        "median": 0,
+        "ciLow": 0,
+        "ciHigh": 0
+      },
+      "deadlocks": {
+        "median": 0,
+        "ciLow": 0,
+        "ciHigh": 0
+      },
+      "peakPlatformThreads": {
+        "median": 87,
+        "ciLow": 85,
+        "ciHigh": 89
+      },
+      "peakHeapMb": {
+        "median": 607,
+        "ciLow": 599,
+        "ciHigh": 616
+      },
+      "meanAppCpu": {
+        "median": 0.15,
+        "ciLow": 0.15,
+        "ciHigh": 0.16
+      },
+      "meanLoadGeneratorCpu": {
+        "median": 0.03,
+        "ciLow": 0.03,
+        "ciHigh": 0.03
+      }
+    },
+    "threads-pessimistic-hot90-u64-virtual": {
+      "grid": "threads",
+      "strategy": "pessimistic",
+      "hotShare": 0.9,
+      "users": 64,
+      "threads": "virtual",
+      "repetitions": 5,
+      "createdPerSecond": {
+        "median": 764.44,
+        "ciLow": 705.85,
+        "ciHigh": 832.74
+      },
+      "p50Ms": {
+        "median": 82,
+        "ciLow": 76,
+        "ciHigh": 90
+      },
+      "p95Ms": {
+        "median": 101,
+        "ciLow": 90,
+        "ciHigh": 106
+      },
+      "p99Ms": {
+        "median": 127,
+        "ciLow": 107,
+        "ciHigh": 130
+      },
+      "allP50Ms": {
+        "median": 82,
+        "ciLow": 76,
+        "ciHigh": 90
+      },
+      "allP99Ms": {
+        "median": 127,
+        "ciLow": 107,
+        "ciHigh": 130
+      },
+      "retries": {
+        "median": 0,
+        "ciLow": 0,
+        "ciHigh": 0
+      },
+      "unavailable503": {
+        "median": 0,
+        "ciLow": 0,
+        "ciHigh": 0
+      },
+      "deadlocks": {
+        "median": 0,
+        "ciLow": 0,
+        "ciHigh": 0
+      },
+      "peakPlatformThreads": {
+        "median": 22,
+        "ciLow": 22,
+        "ciHigh": 22
+      },
+      "peakHeapMb": {
+        "median": 608,
+        "ciLow": 596,
+        "ciHigh": 615
+      },
+      "meanAppCpu": {
+        "median": 0.21,
+        "ciLow": 0.2,
+        "ciHigh": 0.22
+      },
+      "meanLoadGeneratorCpu": {
+        "median": 0.03,
+        "ciLow": 0.03,
+        "ciHigh": 0.03
+      }
+    }
+  }
+}
