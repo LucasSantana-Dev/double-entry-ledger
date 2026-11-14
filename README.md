@@ -84,11 +84,47 @@ Bigger or different invariant runs:
 ./mvnw test -Dtest=ConcurrentTransfersInvariantTest -Dledger.invariant.operations=20000 -Dledger.invariant.seed=7
 ```
 
+Load benchmark (Docker; one cell, short windows):
+
+```bash
+./mvnw -Pbenchmark verify -Dledger.bench.cells=strategy-pessimistic-hot30 -Dledger.bench.warmup=PT5S -Dledger.bench.measure=PT10S
+```
+
+## Benchmark results
+
+One run on a GitHub-hosted runner (4 vCPU AMD EPYC 9V45, Java 25), 24 cells × 5 repetitions in shuffled order, 30 s warm-up and 60 s measured per cell, a fresh PostgreSQL 18 and a fresh application JVM per cell ([ADRs 0012 to 0015](docs/adr/0012-benchmark-scenarios-and-metrics.md)). Values are medians over the 5 repetitions. Full tables with 95% bootstrap intervals: [results.md](docs/benchmarks/2026-11-13/results.md); raw rows: [results.jsonl](docs/benchmarks/2026-11-13/results.jsonl). After every cell the ledger checks passed (entries sum to zero, no negative customer balance, balances match entries).
+
+**Strategies** (256 users, virtual threads; "hot" is the share of transfers that touch one shared account):
+
+| strategy | created/s 0% / 30% / 90% hot | p99 ms (201) 0% / 30% / 90% | 503 per minute at 90% hot |
+|---|---|---|---|
+| conditional-update | 2,042 / 1,602 / 983 | 354 / 359 / 337 | 0 |
+| pessimistic | 1,878 / 1,458 / 768 | 380 / 395 / 416 | 0 |
+| optimistic | 1,813 / 1,043 / 292 | 391 / 676 / 745 | 16,158 |
+| serializable | 1,557 / 808 / 228 | 446 / 830 / 917 | 13,186 |
+
+- The two strategies that wait instead of aborting (conditional-update, pessimistic) degrade gracefully as contention grows and never return 503. Conditional-update is ahead of pessimistic in every cell: one `UPDATE ... WHERE balance >= x` per account instead of a `SELECT ... FOR UPDATE` plus an `UPDATE`.
+- The two that abort (optimistic, serializable) collapse under a hot account: at 90% they create 3 to 4 times fewer transfers than conditional-update, and a large share of requests end in 503 after 5 attempts. Without a hot account optimistic is close to pessimistic, and serializable creates 17 to 24% fewer transfers than the waiting strategies.
+
+**Virtual vs platform threads** (pessimistic strategy):
+
+| users | hot | created/s platform / virtual | p99 ms platform / virtual | platform threads platform / virtual |
+|---|---|---|---|---|
+| 64 | 0% | 1,934 / 1,967 | 90 / 81 | 87 / 22 |
+| 64 | 90% | 874 / 764 | 130 / 127 | 87 / 22 |
+| 1,024 | 0% | 1,776 / 1,906 | 1,011 / 1,550 | 215 / 22 |
+| 1,024 | 90% | 927 / 736 | 1,498 / 1,600 | 215 / 22 |
+
+- Virtual threads do not raise throughput: 10 database connections cap the work in flight, so more request threads only add queueing. That was the hypothesis of ADR 0012 and the data agrees. Most cells are within about 10% with overlapping intervals; at 1,024 users and 90% hot, platform threads are ahead (927 against 736 created/s, intervals apart).
+- Virtual threads keep the platform thread count flat (22 against 215 at 1,024 users). At 1,024 users they cost about 170 MB more heap (about 835 against 665 MB) and a longer p99 tail. A likely reason, not measured here: with virtual threads every request is admitted and its object graph lives while it waits for a connection, while Tomcat's 200-thread pool keeps the excess in the accept queue.
+
+**Limits of these numbers.** One run on a shared cloud runner, with the load generator, the application and PostgreSQL on the same 4 vCPU VM; absolute numbers will differ elsewhere, the comparison between cells is the result. 5 repetitions make the bootstrap intervals coarse. PostgreSQL's CPU and the time spent waiting for a Hikari connection are not measured (ADR 0012); the application used about one core of four and the load generator under a third of a core, so the database and the 10-connection pool are the likely limit. Each cell starts from fresh tables with 1,000 accounts, so table and index bloat over hours is not covered.
+
 ## Roadmap
 
 | Phase | Scope | Status |
 |---|---|---|
 | 1 | Accounts, deposits, transfers, idempotency, invariant test | done |
-| 2 | Benchmark four locking strategies and virtual vs platform threads under load | planned |
+| 2 | Benchmark four locking strategies and virtual vs platform threads under load | done |
 | 3 | Transactional outbox to Kafka, idempotent consumer, reconciliation, fault injection | planned |
 | 4 | Traces and metrics, deployment, results write-up | planned |
