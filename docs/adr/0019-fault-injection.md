@@ -39,4 +39,12 @@ Hooks are setters on the relay and the listener (`afterSendHook`, `afterApplyHoo
 
 ## Measured cost
 
-To be filled in with the measured `./mvnw verify` time before and after phase 3.
+Local run, 2026-11-16, Windows 11 laptop, JDK 25, Docker Desktop, images already pulled:
+
+| Build | Tests | `./mvnw verify` |
+|---|---|---|
+| Before phase 3 (`main` at 6a59f6d) | 55 | 1 min 40 s |
+| After phase 3 | 69 | 3 min 27 s |
+| of which `FaultInjectionTest` alone | 4 | 50 s |
+
+Phase 3 adds about 1 min 47 s: 50 s for the fault scenarios (most of it the broker pause, which waits for the producer's 8 s delivery timeout), the rest is a Kafka container per Spring test context and the invariant test draining 4,000 events per strategy into the statement. Inside the 2 to 4 minute estimate and below the 6 minute budget, so the fault tests stay in the default `verify`; no separate profile.
