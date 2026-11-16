@@ -3,6 +3,7 @@ package tech.lucassantana.ledger.reconciliation;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 
+import io.micrometer.core.instrument.MeterRegistry;
 import java.sql.Connection;
 import java.sql.Statement;
 import java.time.Duration;
@@ -45,6 +46,8 @@ class ReconciliationTest {
     private JdbcClient jdbc;
     @Autowired
     private DataSource dataSource;
+    @Autowired
+    private MeterRegistry meters;
 
     @Test
     void reportsNothingWhenTheStatementMatchesAndEveryKindOfDifferenceWhenItDoesNot() throws Exception {
@@ -64,6 +67,7 @@ class ReconciliationTest {
         assertThat(clean.isClean()).as("report %s", clean).isTrue();
         assertThat(clean.ledgerTransfers()).isEqualTo(ledgerTransfers);
         assertThat(clean.statementTransfers()).isEqualTo(ledgerTransfers);
+        assertThat(differencesGauge()).as("ledger.reconciliation.differences after a clean run").isZero();
 
         // Events still in the outbox are not missing: pending is on its way, parked is reported apart.
         UUID waiting;
@@ -120,11 +124,19 @@ class ReconciliationTest {
                 Collectors.summingLong(d -> d.statementCents() - d.ledgerCents()))))
                 .isEqualTo(Map.of(a, 1_00L, b, -1_00L + 5_00L, c, 1_00L));
         assertThat(report.parkedInOutbox()).containsExactly(rejected);
+        assertThat(differencesGauge()).as("ledger.reconciliation.differences")
+                .isEqualTo(report.differences()).isPositive();
 
         // The scheduled check looks at a sliding window: differences before it are out of scope.
         ReconciliationReport later = reconciliation.reconcile(tampered.plusMillis(1), Instant.now());
         assertThat(later.isClean()).as("report %s", later).isTrue();
         assertThat(later.ledgerTransfers()).isZero();
+        assertThat(differencesGauge()).as("the gauge follows the last run").isZero();
+    }
+
+    /** Phase 4 criterion 6 (ADR 0022): the gauge reports the last run, whichever call made it. */
+    private long differencesGauge() {
+        return (long) meters.get("ledger.reconciliation.differences").gauge().value();
     }
 
     private UUID openWith(long cents) {
