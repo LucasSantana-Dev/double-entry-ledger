@@ -7,9 +7,9 @@ import tech.lucassantana.ledger.account.Account;
 import tech.lucassantana.ledger.account.AccountNotFoundException;
 import tech.lucassantana.ledger.account.AccountRepository;
 
-/** {@code SELECT ... FOR UPDATE} on both accounts, smaller id first (ADR 0007). The default. */
+/** {@code SELECT ... FOR UPDATE} on both accounts, smaller id first (ADR 0007). The default until ADR 0020. */
 @Component
-@ConditionalOnProperty(name = "ledger.concurrency.strategy", havingValue = "pessimistic", matchIfMissing = true)
+@ConditionalOnProperty(name = "ledger.concurrency.strategy", havingValue = "pessimistic")
 class PessimisticStrategy implements ConcurrencyStrategy {
 
     private final AccountRepository accounts;

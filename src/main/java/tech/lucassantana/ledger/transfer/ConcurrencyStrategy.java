@@ -8,7 +8,7 @@ import org.springframework.transaction.TransactionDefinition;
  * accounts at the same time (ADR 0010). Runs inside the caller's transaction, so a failure rolls
  * back the balances together with the transfer, its entries and its idempotency key.
  *
- * <p>Selected by {@code ledger.concurrency.strategy}.
+ * <p>Selected by {@code ledger.concurrency.strategy}; {@code conditional-update} when unset (ADR 0020).
  */
 interface ConcurrencyStrategy {
 

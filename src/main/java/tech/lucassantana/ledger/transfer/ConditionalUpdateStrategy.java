@@ -16,9 +16,11 @@ import tech.lucassantana.ledger.account.InsufficientFundsException;
  * <p>The two statements run in id order, like the pessimistic strategy, so A->B and B->A wait
  * for each other instead of deadlocking. Only when a statement matches no row does the strategy
  * read the account, to tell the client why.
+ *
+ * <p>The default when {@code ledger.concurrency.strategy} is not set (ADR 0020).
  */
 @Component
-@ConditionalOnProperty(name = "ledger.concurrency.strategy", havingValue = "conditional-update")
+@ConditionalOnProperty(name = "ledger.concurrency.strategy", havingValue = "conditional-update", matchIfMissing = true)
 class ConditionalUpdateStrategy implements ConcurrencyStrategy {
 
     private final AccountRepository accounts;
