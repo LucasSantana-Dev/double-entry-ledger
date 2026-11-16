@@ -33,6 +33,11 @@ import tech.lucassantana.ledger.reconciliation.ReconciliationReport.WindowDiffer
  * outbox row is still unpublished is not a difference: it is reported apart, as pending, or as
  * parked when Kafka rejected it for good (ADR 0016), and is left out of every comparison on both
  * sides. A broker outage therefore shows up as a growing pending list, not as false differences.
+ *
+ * <p>The two gauges (ADR 0022) follow the scheduled run only: {@code ledger.reconciliation.differences}
+ * is what the last scheduled run found, and {@code ledger.reconciliation.last.success} when it
+ * completed, in epoch seconds (0 until the first one). A manual or test call of
+ * {@link #reconcile(Instant, Instant)} over another range leaves both alone.
  */
 @Component
 public class Reconciliation {
@@ -48,6 +53,7 @@ public class Reconciliation {
     private final Duration lag;
     private final Duration window;
     private final AtomicLong lastDifferences = new AtomicLong();
+    private final AtomicLong lastSuccessEpochMillis = new AtomicLong();
 
     Reconciliation(PlatformTransactionManager transactionManager, JdbcClient jdbc, MeterRegistry meters,
             @Value("${ledger.reconciliation.lag-ms:60000}") long lagMs,
@@ -61,7 +67,11 @@ public class Reconciliation {
         this.lag = Duration.ofMillis(lagMs);
         this.window = Duration.ofHours(windowHours);
         Gauge.builder("ledger.reconciliation.differences", lastDifferences, AtomicLong::get)
-                .description("Differences found by the last reconciliation run, 0 when it was clean")
+                .description("Differences found by the last scheduled reconciliation run, 0 when it was clean")
+                .register(meters);
+        Gauge.builder("ledger.reconciliation.last.success", lastSuccessEpochMillis, m -> m.get() / 1000.0)
+                .description("When the last scheduled reconciliation run completed, in epoch seconds, 0 before the first")
+                .baseUnit("seconds")
                 .register(meters);
     }
 
@@ -69,7 +79,9 @@ public class Reconciliation {
             fixedDelayString = "${ledger.reconciliation.interval-ms:60000}")
     void scheduled() {
         Instant cutoff = Instant.now().minus(lag);
-        reconcile(cutoff.minus(window), cutoff);
+        ReconciliationReport report = reconcile(cutoff.minus(window), cutoff);
+        lastDifferences.set(report.differences());
+        lastSuccessEpochMillis.set(System.currentTimeMillis());
     }
 
     /** The whole history before {@code cutoff}: for tests and manual checks, not for the schedule. */
@@ -80,7 +92,6 @@ public class Reconciliation {
     /** Compares what happened in {@code [from, cutoff)}, logs one line and returns the report. */
     public ReconciliationReport reconcile(Instant from, Instant cutoff) {
         ReconciliationReport report = snapshot.execute(status -> compare(from, cutoff));
-        lastDifferences.set(report.differences());
         if (report.isClean()) {
             log.info("reconciliation clean from {} to {}: {} transfers in ledger and statement, {} pending in outbox",
                     from, cutoff, report.ledgerTransfers(), report.pendingInOutbox().size());
