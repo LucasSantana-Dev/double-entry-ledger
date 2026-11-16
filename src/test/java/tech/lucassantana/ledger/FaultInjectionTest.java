@@ -202,6 +202,8 @@ class FaultInjectionTest {
             assertThat(count("select count(*) from statement.statement_lines"))
                     .isEqualTo(2 * count("select count(*) from transfers"));
         });
+        // Transient failures were retried, never dead-lettered.
+        assertThat(meters.counter("ledger.statement.dead-lettered").count()).isZero();
         assertThat(count("select count(*) from statement.processed_events"))
                 .isEqualTo(count("select count(*) from outbox_events"));
         ReconciliationReport report = reconciliation.reconcile(Instant.now());

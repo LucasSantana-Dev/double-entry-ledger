@@ -4,11 +4,17 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 
 import io.micrometer.core.instrument.MeterRegistry;
+import java.nio.charset.StandardCharsets;
+import java.sql.Connection;
+import java.sql.Statement;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
+import javax.sql.DataSource;
+import org.apache.kafka.common.utils.Utils;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -17,12 +23,16 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.kafka.support.KafkaHeaders;
+import org.testcontainers.kafka.KafkaContainer;
 import tech.lucassantana.ledger.TestcontainersConfiguration;
+import tech.lucassantana.ledger.TopicReader;
 import tech.lucassantana.ledger.account.Account;
 import tech.lucassantana.ledger.account.AccountRepository;
 import tech.lucassantana.ledger.money.Money;
 import tech.lucassantana.ledger.outbox.LedgerEvent;
 import tech.lucassantana.ledger.outbox.TransferCommitted;
+import tech.lucassantana.ledger.reconciliation.Reconciliation;
 import tech.lucassantana.ledger.transfer.TransferService;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -47,6 +57,12 @@ class StatementProjectionTest {
     private KafkaTemplate<String, LedgerEvent> kafka;
     @Autowired
     private JsonMapper json;
+    @Autowired
+    private DataSource dataSource;
+    @Autowired
+    private KafkaContainer broker;
+    @Autowired
+    private Reconciliation reconciliation;
     @Value("${ledger.outbox.topic}")
     private String topic;
 
@@ -101,6 +117,46 @@ class StatementProjectionTest {
         await().atMost(WAIT).until(() -> duplicates() > duplicatesBefore);
         assertThat(crashes.get()).as("deliveries of the crashed event").isEqualTo(2);
         assertApplyOnce(transferId);
+    }
+
+    @Test
+    void deadLettersAnEventItCannotApplyAndKeepsThePartitionMoving() throws Exception {
+        UUID a = openWith(100_00);
+        UUID b = openWith(0);
+        double deadLetteredBefore = meters.counter("ledger.statement.dead-lettered").count();
+        UUID broken;
+        try (Connection other = dataSource.getConnection(); Statement sql = other.createStatement()) {
+            sql.execute("select pg_advisory_lock(4242, 1)"); // hold the relay until the row is broken
+            broken = service.transfer(key(), a, b, new Money(1_00)).transfer().getId();
+            // Deserializes fine, but names no accounts: the statement insert violates NOT NULL every time.
+            jdbc.sql("update outbox_events set payload = jsonb_build_object('transferId', aggregate_id) "
+                    + "where aggregate_id = ?").param(broken).update();
+            sql.execute("select pg_advisory_unlock(4242, 1)");
+        }
+        int partition = partitionOf(broken);
+        List<UUID> later = new ArrayList<>();
+        while (later.stream().noneMatch(id -> partitionOf(id) == partition)) {
+            assertThat(later).as("transfers looking for partition %d", partition).hasSizeLessThan(100);
+            later.add(service.transfer(key(), a, b, new Money(1_00)).transfer().getId());
+        }
+
+        // Every later event, including those behind it on its partition, is applied.
+        later.forEach(this::awaitLines);
+        await().atMost(WAIT).until(() -> meters.counter("ledger.statement.dead-lettered").count() > deadLetteredBefore);
+        var deadLetters = TopicReader.readUntil(broker.getBootstrapServers(), topic + ".DLT",
+                read -> read.stream().anyMatch(r -> broken.toString().equals(r.key())), WAIT);
+        var record = deadLetters.stream().filter(r -> broken.toString().equals(r.key())).findFirst().orElseThrow();
+        assertThat(record.partition()).isEqualTo(partition);
+        assertThat(new String(record.headers().lastHeader(KafkaHeaders.DLT_EXCEPTION_FQCN).value(),
+                StandardCharsets.UTF_8)).isNotBlank();
+        assertThat(jdbc.sql("select count(*) from statement.statement_lines where transfer_id = ?")
+                .param(broken).query(Long.class).single()).isZero();
+        assertThat(reconciliation.reconcile(Instant.now()).missingFromStatement()).contains(broken);
+    }
+
+    /** The default partitioner's choice for a keyed record on the 3-partition topic. */
+    private static int partitionOf(UUID transferId) {
+        return Utils.toPositive(Utils.murmur2(transferId.toString().getBytes(StandardCharsets.UTF_8))) % 3;
     }
 
     @Test

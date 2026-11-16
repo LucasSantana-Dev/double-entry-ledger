@@ -26,6 +26,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
+import tools.jackson.core.JacksonException;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
@@ -43,12 +44,14 @@ public class OutboxRelay {
     private static final int LOCK_CLASS = 4242;
     private static final int LOCK_RELAY = 1;
 
-    /** Kafka errors that will fail the same way on every retry: the row is parked, not retried. */
+    /** Errors that will fail the same way on every retry: the row is parked, not retried. */
     private static final List<Class<? extends Throwable>> POISON = List.of(
             RecordTooLargeException.class,
             RecordBatchTooLargeException.class,
             SerializationException.class,
-            InvalidTopicException.class);
+            InvalidTopicException.class,
+            // The stored payload is not valid JSON: it will never become an envelope.
+            JacksonException.class);
 
     private record Pending(long id, UUID eventId, String aggregateType, UUID aggregateId, String eventType,
             int schemaVersion, String payload, Instant occurredAt) {
