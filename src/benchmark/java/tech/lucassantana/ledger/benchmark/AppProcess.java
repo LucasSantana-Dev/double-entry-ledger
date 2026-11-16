@@ -58,7 +58,15 @@ final class AppProcess implements AutoCloseable {
                 "--management.endpoints.web.exposure.include=health,metrics",
                 // Conflict aborts are counted by the retry counters; logging each one would add
                 // I/O to exactly the strategies that abort, skewing the comparison.
-                "--logging.level.org.hibernate.orm.jdbc.error=ERROR"));
+                "--logging.level.org.hibernate.orm.jdbc.error=ERROR",
+                // Phase 4 observability off, so the app runs as it did for the phase 2 numbers:
+                // no spans or trace propagation, no OTLP push, no JDBC observation proxy, and
+                // plain text console logs instead of ECS JSON.
+                "--management.tracing.export.enabled=false",
+                "--management.tracing.sampling.probability=0",
+                "--management.otlp.metrics.export.enabled=false",
+                "--jdbc.datasource-proxy.enabled=false",
+                "--logging.structured.format.console="));
         Files.createDirectories(log.getParent());
         Process process = new ProcessBuilder(command)
                 .redirectErrorStream(true)
