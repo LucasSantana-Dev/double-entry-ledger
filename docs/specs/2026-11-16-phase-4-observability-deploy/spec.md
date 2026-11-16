@@ -1,5 +1,5 @@
 ---
-status: planned
+status: done
 date: 2026-11-16
 phase: 4
 tags: [tracing, metrics, opentelemetry, grafana, kubernetes, kind, write-up]

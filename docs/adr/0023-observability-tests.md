@@ -31,3 +31,7 @@ Option 1, decided by the repo owner.
 
 - Fast, deterministic checks for the structure of the trace; one slower test proves the export path.
 - CI pulls one more image.
+
+## Measured cost
+
+GitHub Actions `verify` job, ubuntu-latest, 2026-11-16: 3:57 and 4:02 on main before phase 4 (runs 43962847652 and 43961482755), 5:27 on the phase 4 branch (run 43974868216, Maven `Total time` 5:11, 77 tests). Phase 4 adds about 1:30 to the job, of which `OtlpExportSmokeTest` takes 49 s including the `grafana/otel-lgtm:0.40.0` pull. Locally (Windows, Docker Desktop, image cached) the same suite went from 3:51 to 4:58. Well inside the 20 minute limit.
