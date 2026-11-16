@@ -6,7 +6,7 @@ Portfolio project: a double-entry transfer ledger whose consistency under concur
 
 - `./mvnw verify`: full build and tests (needs Docker running for Testcontainers).
 - `./mvnw test -Dtest=ConcurrentTransfersInvariantTest -Dledger.invariant.operations=20000 -Dledger.invariant.seed=7`: bigger or different invariant run.
-- `./mvnw spring-boot:test-run`: run the API locally on a throwaway PostgreSQL container.
+- `./mvnw spring-boot:test-run`: run the API locally on throwaway PostgreSQL and Kafka containers.
 
 ## Rules
 
