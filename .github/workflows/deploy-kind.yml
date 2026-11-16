@@ -1,0 +1,66 @@
+name: Deploy to kind
+
+# Builds the image, deploys it to a throwaway kind cluster and runs the smoke test (ADR 0024).
+on:
+  push:
+    branches: [main]
+    paths: &deploy-paths
+      - src/main/**
+      - pom.xml
+      - .mvn/**
+      - mvnw
+      - Dockerfile
+      - .dockerignore
+      - deploy/**
+      - .github/workflows/deploy-kind.yml
+  pull_request:
+    paths: *deploy-paths
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      IMAGE: double-entry-ledger:kind
+    steps:
+      - uses: actions/checkout@v5
+      - name: Build the image
+        run: docker build -t "$IMAGE" .
+      - uses: helm/kind-action@v1.15.2
+        with:
+          version: v0.33.0
+          node_image: kindest/node:v1.37.0@sha256:a1ed56cfb0e7b93589bdf97c8cd566405a265939e3620fc4f5de89adff580ae5
+          cluster_name: ledger
+      - name: Load the image into the cluster
+        run: kind load docker-image "$IMAGE" --name ledger
+      - name: Apply the kind overlay
+        run: kubectl apply -k deploy/k8s/overlays/kind
+      - name: Wait for the rollouts
+        run: |
+          kubectl -n ledger rollout status statefulset/postgres --timeout=180s
+          kubectl -n ledger rollout status statefulset/kafka --timeout=180s
+          kubectl -n ledger rollout status deployment/ledger --timeout=300s
+      - name: Smoke test
+        run: |
+          kubectl -n ledger port-forward service/ledger 8080:8080 > port-forward.log 2>&1 &
+          for _ in $(seq 1 30); do
+            curl -sf http://localhost:8080/actuator/health/readiness > /dev/null && break
+            sleep 1
+          done
+          deploy/smoke.sh
+      - name: Dump cluster state
+        if: failure()
+        run: |
+          kubectl -n ledger get all,pvc -o wide || true
+          kubectl -n ledger get events --sort-by=.lastTimestamp || true
+          for pod in $(kubectl -n ledger get pods -o name); do
+            echo "::group::logs of $pod"
+            kubectl -n ledger logs "$pod" --all-containers --prefix --tail=500 || true
+            kubectl -n ledger logs "$pod" --all-containers --prefix --previous --tail=200 2>/dev/null || true
+            echo "::endgroup::"
+          done
+          cat port-forward.log 2>/dev/null || true
