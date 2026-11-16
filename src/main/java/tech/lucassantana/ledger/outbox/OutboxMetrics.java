@@ -38,6 +38,8 @@ public class OutboxMetrics {
                 .register(meters);
     }
 
+    // Shares Boot's single scheduler thread with the relay and the reconciliation: during a Kafka
+    // outage the gauges go stale for at most one relay tick, bounded by the relay's send timeout.
     @Scheduled(fixedDelayString = "${ledger.outbox.metrics.refresh-ms:5000}")
     void scheduledRefresh() {
         try {
