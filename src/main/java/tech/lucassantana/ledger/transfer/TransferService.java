@@ -18,6 +18,7 @@ import tech.lucassantana.ledger.idempotency.IdempotencyKeyInProgressException;
 import tech.lucassantana.ledger.idempotency.IdempotencyKeyRepository;
 import tech.lucassantana.ledger.idempotency.IdempotencyKeyReusedException;
 import tech.lucassantana.ledger.money.Money;
+import tech.lucassantana.ledger.outbox.OutboxWriter;
 
 /**
  * Owns its transactions: each public method runs one transaction per attempt and retries the
@@ -41,6 +42,7 @@ public class TransferService {
     private final TransferRepository transfers;
     private final EntryRepository entries;
     private final IdempotencyKeyRepository keys;
+    private final OutboxWriter outbox;
 
     TransferService(
             PlatformTransactionManager transactionManager,
@@ -48,7 +50,8 @@ public class TransferService {
             ConcurrencyStrategy concurrency,
             TransferRepository transfers,
             EntryRepository entries,
-            IdempotencyKeyRepository keys) {
+            IdempotencyKeyRepository keys,
+            OutboxWriter outbox) {
         this.transaction = new TransactionTemplate(transactionManager);
         this.transaction.setIsolationLevel(concurrency.isolationLevel());
         this.retries = meters.counter("ledger.transfer.conflict.retries");
@@ -57,6 +60,7 @@ public class TransferService {
         this.transfers = transfers;
         this.entries = entries;
         this.keys = keys;
+        this.outbox = outbox;
     }
 
     /** Moves money between two customer accounts. */
@@ -124,10 +128,15 @@ public class TransferService {
         concurrency.move(fromId, toId, amount.cents(), operation == Operation.DEPOSIT);
 
         // 3. Record why the money moved, all in this transaction. Any failure above or below
-        //    rolls back everything, the idempotency key included.
+        //    rolls back everything, the idempotency key and the event included.
         Transfer transfer = transfers.save(new Transfer(fromId, toId, amount.cents()));
         entries.saveAll(List.of(Entry.debit(transfer), Entry.credit(transfer)));
         keys.save(new IdempotencyKey(key, fingerprint, transfer.getId()));
+
+        // 4. The event, last (ADR 0016): its sequence is drawn after step 2 locked or read the
+        //    accounts, so per account the sequence follows commit order.
+        outbox.transferCommitted(
+                transfer.getId(), fromId, toId, amount.cents(), transfer.getCreatedAt());
         return new TransferOutcome(transfer, false);
     }
 

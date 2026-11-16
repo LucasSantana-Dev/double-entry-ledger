@@ -231,6 +231,21 @@ class ConcurrentTransfersInvariantTest {
                 where not exists (select 1 from idempotency_keys k where k.transfer_id = t.id)
                 """)).isZero();
 
+        // Phase 3 invariant 1: every committed transfer has exactly one outbox event describing it,
+        // and the attempts that rolled back (insufficient funds, conflicts, retries) left none.
+        assertThat(count("select count(*) from outbox_events")).isEqualTo(count("select count(*) from transfers"));
+        assertThat(count("""
+                select count(*) from transfers t
+                where (select count(*) from outbox_events o where o.aggregate_id = t.id) <> 1
+                """)).isZero();
+        assertThat(count("""
+                select count(*) from outbox_events o join transfers t on t.id = o.aggregate_id
+                where (o.payload ->> 'transferId')::uuid <> t.id
+                   or (o.payload ->> 'fromAccountId')::uuid <> t.from_account_id
+                   or (o.payload ->> 'toAccountId')::uuid <> t.to_account_id
+                   or (o.payload ->> 'amountCents')::bigint <> t.amount_cents
+                """)).isZero();
+
         // Client-side model: the database holds exactly the transfers reported as created, with the
         // requested accounts and amounts, and each final balance is what those transfers imply.
         assertMatchesClientModel(ids, submissions, outcomesByKey, created);
