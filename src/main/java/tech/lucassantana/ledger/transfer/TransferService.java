@@ -3,7 +3,10 @@ package tech.lucassantana.ledger.transfer;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Duration;
+import java.util.EnumMap;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
@@ -37,8 +40,8 @@ public class TransferService {
     private enum Operation { TRANSFER, DEPOSIT }
 
     private final TransactionTemplate transaction;
-    private final Counter retries;
-    private final Counter unavailable;
+    private final Map<Operation, Counter> retries = new EnumMap<>(Operation.class);
+    private final Map<Operation, Counter> unavailable = new EnumMap<>(Operation.class);
     private final ConcurrencyStrategy concurrency;
     private final TransferRepository transfers;
     private final EntryRepository entries;
@@ -56,15 +59,22 @@ public class TransferService {
             OutboxWriter outbox) {
         this.transaction = new TransactionTemplate(transactionManager);
         this.transaction.setIsolationLevel(concurrency.isolationLevel());
-        // Tagged with the configured strategy (ADR 0022), so a dashboard compares strategies.
-        this.retries = Counter.builder("ledger.transfer.retries")
-                .description("Attempts retried after a concurrency conflict")
-                .tag("strategy", strategyName)
-                .register(meters);
-        this.unavailable = Counter.builder("ledger.transfer.unavailable")
-                .description("Requests answered 503 after the retries ran out")
-                .tag("strategy", strategyName)
-                .register(meters);
+        // Tagged with the configured strategy and the operation (ADR 0022), so a dashboard
+        // compares strategies and tells transfers from deposits, which all contend on the
+        // settlement account.
+        for (Operation operation : Operation.values()) {
+            String tag = operation.name().toLowerCase(Locale.ROOT);
+            retries.put(operation, Counter.builder("ledger.transfer.retries")
+                    .description("Attempts retried after a concurrency conflict")
+                    .tag("strategy", strategyName)
+                    .tag("operation", tag)
+                    .register(meters));
+            unavailable.put(operation, Counter.builder("ledger.transfer.unavailable")
+                    .description("Requests answered 503 after the retries ran out")
+                    .tag("strategy", strategyName)
+                    .tag("operation", tag)
+                    .register(meters));
+        }
         this.concurrency = concurrency;
         this.transfers = transfers;
         this.entries = entries;
@@ -74,12 +84,12 @@ public class TransferService {
 
     /** Moves money between two customer accounts. */
     public TransferOutcome transfer(String idempotencyKey, UUID fromAccountId, UUID toAccountId, Money amount) {
-        return withRetry(() -> move(idempotencyKey, Operation.TRANSFER, fromAccountId, toAccountId, amount));
+        return withRetry(Operation.TRANSFER, () -> move(idempotencyKey, Operation.TRANSFER, fromAccountId, toAccountId, amount));
     }
 
     /** Brings money into a customer account; the settlement account is the other side (ADR 0008). */
     public TransferOutcome deposit(String idempotencyKey, UUID accountId, Money amount) {
-        return withRetry(() -> move(idempotencyKey, Operation.DEPOSIT, Account.SETTLEMENT_ID, accountId, amount));
+        return withRetry(Operation.DEPOSIT, () -> move(idempotencyKey, Operation.DEPOSIT, Account.SETTLEMENT_ID, accountId, amount));
     }
 
     /**
@@ -88,28 +98,29 @@ public class TransferService {
      * key and its advisory lock included, so the next attempt starts clean. Any other failure
      * (insufficient funds, unknown account) is a final answer and is not retried.
      */
-    private TransferOutcome withRetry(Supplier<TransferOutcome> attempt) {
+    private TransferOutcome withRetry(Operation operation, Supplier<TransferOutcome> attempt) {
         for (int n = 1; ; n++) {
             try {
                 return transaction.execute(status -> attempt.get());
             } catch (ConcurrencyFailureException conflict) {
                 if (n == MAX_ATTEMPTS) {
-                    throw unavailable(n, conflict);
+                    throw unavailable(operation, n, conflict);
                 }
-                retries.increment();
+                retries.get(operation).increment();
                 try {
                     backoff(n);
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
-                    throw unavailable(n, conflict);
+                    throw unavailable(operation, n, conflict);
                 }
             }
         }
     }
 
     /** The exception the API answers with 503; counted here so the counter matches the responses. */
-    private ConcurrencyConflictException unavailable(int attempts, ConcurrencyFailureException conflict) {
-        unavailable.increment();
+    private ConcurrencyConflictException unavailable(Operation operation, int attempts,
+            ConcurrencyFailureException conflict) {
+        unavailable.get(operation).increment();
         return new ConcurrencyConflictException(attempts, conflict);
     }
 
