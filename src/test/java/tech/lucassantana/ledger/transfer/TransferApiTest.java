@@ -46,11 +46,20 @@ class TransferApiTest {
     @Autowired
     TransactionTemplate transaction;
 
+    @Autowired
+    ConcurrencyStrategy strategy;
+
     MockMvc mvc;
 
     @BeforeEach
     void setUp() {
         mvc = MockMvcBuilders.webAppContextSetup(context).build();
+    }
+
+    @Test
+    void defaultStrategyIsConditionalUpdate() {
+        // No ledger.concurrency.strategy here, so this is what a deployment gets (ADR 0020).
+        assertThat(strategy).isInstanceOf(ConditionalUpdateStrategy.class);
     }
 
     @Test

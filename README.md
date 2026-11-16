@@ -65,6 +65,7 @@ Each decision has an ADR with the options, the evidence and the consequences.
 | Ledger model | Immutable entries + materialized balance | [0005](docs/adr/0005-entries-plus-materialized-balance.md) |
 | Idempotency | PostgreSQL, same transaction, 409 while in flight | [0006](docs/adr/0006-idempotency-key-in-postgres.md) |
 | Concurrency | `SELECT ... FOR UPDATE`, locks taken in id order | [0007](docs/adr/0007-pessimistic-locking-ordered-by-id.md) |
+| Default concurrency strategy | Conditional `UPDATE ... WHERE balance >= x`, chosen from the phase 2 benchmark | [0020](docs/adr/0020-default-strategy-conditional-update.md) |
 | Money entering | Settlement account + deposits | [0008](docs/adr/0008-settlement-account-and-deposits.md) |
 | Property tests | Seeded randomized JUnit tests | [0009](docs/adr/0009-seeded-randomized-tests-instead-of-jqwik.md) |
 | Publishing events | Transactional outbox, polling relay, single relay by advisory lock | [0016](docs/adr/0016-outbox-polling-relay.md) |
