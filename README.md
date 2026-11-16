@@ -4,7 +4,7 @@
 
 A money transfer service whose central guarantee is that money is never created, lost or duplicated, even with thousands of concurrent requests and clients retrying. The guarantee is proven by a test that hammers a real PostgreSQL and then audits the books, not by a claim in this README.
 
-Java 25 · Spring Boot 4.1 · Spring Data JPA · PostgreSQL 18 · Flyway · Testcontainers · virtual threads
+Java 25 · Spring Boot 4.1 · Spring Data JPA · PostgreSQL 18 · Kafka · Flyway · Testcontainers · Toxiproxy · virtual threads
 
 ## What the tests prove
 
@@ -29,6 +29,29 @@ Runs on 2026-11-13 (JDK 25, PostgreSQL 18 in Docker, Windows 11 laptop):
 
 The seed fixes the workload, not the thread interleaving, so the counts move a little between runs of the same seed. The invariants must hold on every run. Timings are not reported here: this test is built for contention, not speed, and throughput is measured properly in phase 2.
 
+## Events
+
+Every committed transfer and deposit also becomes a `TransferCommitted` event on the Kafka topic `ledger.transfers`, and an account statement is built from those events. The event is a row in an `outbox_events` table written in the transfer's own transaction; a polling relay, kept to one active instance by a PostgreSQL advisory lock, sends it to Kafka and marks it published ([ADR 0016](docs/adr/0016-outbox-polling-relay.md)). Delivery is at least once, so the statement consumer records each event id in the same transaction as its statement lines and skips ids it has seen ([ADR 0017](docs/adr/0017-statement-projection-and-reconciliation.md)). A scheduled reconciliation compares the ledger with the statement and reports any difference.
+
+Phase 3 invariants, asserted by tests:
+
+1. Every committed transfer has exactly one outbox event, written in the same transaction; a rolled back transfer has none.
+2. Every event is eventually published, including after the broker was down and after the database connection was cut between the send and the mark-published update.
+3. The statement applies each event exactly once, even with duplicate deliveries and a consumer crash before the offset commit.
+4. After every fault, reconciliation reports zero differences and every statement balance equals the ledger balance.
+5. Per account, the statement follows commit order: lines are ordered by the ledger sequence the event carries, not by arrival.
+
+`ConcurrentTransfersInvariantTest` checks all five on top of the seven above, for each of the four concurrency strategies: after the workload it waits for the relay to drain and the statement to catch up, then reconciles. `FaultInjectionTest` breaks things for real ([ADR 0019](docs/adr/0019-fault-injection.md)):
+
+| Fault | How it is injected |
+|---|---|
+| Broker down | Kafka container paused through the Docker API until the producer times out |
+| Database connection cut between send and mark-published | The application reaches PostgreSQL only through Toxiproxy; a hook disables the proxy right after Kafka acknowledged the batch |
+| Consumer crash after its commit, before the offset commit | A hook throws after the statement transaction committed, so the container redelivers |
+| Duplicate delivery | Published rows set back to pending, so the relay sends every event again |
+
+Phase 3 adds about 1 min 47 s to `./mvnw verify` locally (1 min 40 s to 3 min 27 s, 55 to 69 tests).
+
 ## Design decisions
 
 Each decision has an ADR with the options, the evidence and the consequences.
@@ -44,8 +67,12 @@ Each decision has an ADR with the options, the evidence and the consequences.
 | Concurrency | `SELECT ... FOR UPDATE`, locks taken in id order | [0007](docs/adr/0007-pessimistic-locking-ordered-by-id.md) |
 | Money entering | Settlement account + deposits | [0008](docs/adr/0008-settlement-account-and-deposits.md) |
 | Property tests | Seeded randomized JUnit tests | [0009](docs/adr/0009-seeded-randomized-tests-instead-of-jqwik.md) |
+| Publishing events | Transactional outbox, polling relay, single relay by advisory lock | [0016](docs/adr/0016-outbox-polling-relay.md) |
+| Consuming events | Statement projection, dedup table in the same transaction, scheduled reconciliation | [0017](docs/adr/0017-statement-projection-and-reconciliation.md) |
+| Event format | JSON envelope with Jackson 3, amounts in cents | [0018](docs/adr/0018-json-event-envelope.md) |
+| Fault injection | Toxiproxy for PostgreSQL, Docker pause for Kafka, test hooks | [0019](docs/adr/0019-fault-injection.md) |
 
-Market evidence behind the stack choices: [126 Brazilian Java job postings](docs/market/2026-11-13-gupy-java-sample.md), reproducible with `tools/market/gupy_java_sample.py`.
+Market evidence behind the stack choices: [126 Brazilian Java job postings](docs/market/2026-11-13-gupy-java-sample.md), reproducible with `tools/market/gupy_java_sample.py`. For phase 3: [100 postings, messaging and resilience keywords](docs/market/2026-11-16-gupy-phase-3-keywords.md), `tools/market/gupy_phase3_keywords.py`.
 
 ## API
 
@@ -71,11 +98,11 @@ curl -s localhost:8080/accounts/<id>
 
 ## Running
 
-Needs JDK 25 and Docker.
+Needs JDK 25 and Docker. Outside tests, the application expects PostgreSQL and a Kafka broker (`SPRING_KAFKA_BOOTSTRAP_SERVERS`).
 
 ```bash
 ./mvnw verify                  # build and all tests
-./mvnw spring-boot:test-run    # API on :8080 with a throwaway PostgreSQL container
+./mvnw spring-boot:test-run    # API on :8080 with throwaway PostgreSQL and Kafka containers
 ```
 
 Bigger or different invariant runs:
@@ -126,5 +153,5 @@ One run on a GitHub-hosted runner (4 vCPU AMD EPYC 9V45, Java 25), 24 cells × 5
 |---|---|---|
 | 1 | Accounts, deposits, transfers, idempotency, invariant test | done |
 | 2 | Benchmark four locking strategies and virtual vs platform threads under load | done |
-| 3 | Transactional outbox to Kafka, idempotent consumer, reconciliation, fault injection | planned |
+| 3 | Transactional outbox to Kafka, idempotent consumer, reconciliation, fault injection | done |
 | 4 | Traces and metrics, deployment, results write-up | planned |
