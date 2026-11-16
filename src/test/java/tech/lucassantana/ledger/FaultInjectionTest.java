@@ -59,7 +59,7 @@ class FaultInjectionTest {
     private static final Duration RECOVERY = Duration.ofSeconds(120);
 
     private static final Network NETWORK = Network.newNetwork();
-    private static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer(TestcontainersConfiguration.POSTGRES)
+    private static final PostgreSQLContainer POSTGRES = TestcontainersConfiguration.postgres()
             .withNetwork(NETWORK)
             .withNetworkAliases("postgres");
     private static final ToxiproxyContainer TOXIPROXY_CONTAINER = new ToxiproxyContainer(TOXIPROXY).withNetwork(NETWORK);
@@ -213,16 +213,7 @@ class FaultInjectionTest {
                 where a.balance_cents <> coalesce(
                     (select sum(l.amount_cents) from statement.statement_lines l where l.account_id = a.id), 0)
                 """)).isZero();
-        assertThat(count("""
-                select count(*) from (
-                    select a.kind,
-                           sum(l.amount_cents) over (partition by l.account_id order by l.sequence) as running,
-                           l.occurred_at < lag(l.occurred_at) over (partition by l.account_id order by l.sequence)
-                               as went_back
-                    from statement.statement_lines l join accounts a on a.id = l.account_id
-                ) ordered
-                where (ordered.kind = 'CUSTOMER' and ordered.running < 0) or ordered.went_back
-                """)).isZero();
+        assertThat(StatementOrder.violationsBySequence(jdbc)).as("lines out of commit order").isZero();
     }
 
     private List<UUID> openAccounts() {

@@ -39,7 +39,7 @@ Phase 3 invariants, asserted by tests:
 2. Every event is eventually published, including after the broker was down and after the database connection was cut between the send and the mark-published update.
 3. The statement applies each event exactly once, even with duplicate deliveries and a consumer crash before the offset commit.
 4. After every fault, reconciliation reports zero differences and every statement balance equals the ledger balance.
-5. Per account, the statement follows commit order: lines are ordered by the ledger sequence the event carries, not by arrival.
+5. Per account, the statement follows commit order: lines are ordered by the ledger sequence the event carries, not by arrival. The invariant test checks this against the commit timestamps PostgreSQL records for the concurrent transactions.
 
 `ConcurrentTransfersInvariantTest` checks all five on top of the seven above, for each of the four concurrency strategies: after the workload it waits for the relay to drain and the statement to catch up, then reconciles. `FaultInjectionTest` breaks things for real ([ADR 0019](docs/adr/0019-fault-injection.md)):
 

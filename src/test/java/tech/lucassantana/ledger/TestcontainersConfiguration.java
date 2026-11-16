@@ -18,7 +18,16 @@ public class TestcontainersConfiguration {
     @Bean
     @ServiceConnection
     PostgreSQLContainer postgresContainer() {
-        return new PostgreSQLContainer(POSTGRES);
+        return postgres();
+    }
+
+    /**
+     * {@code track_commit_timestamp} lets tests read the real commit order of transactions
+     * ({@link StatementOrder}); {@code fsync=off} is the Testcontainers default this command replaces.
+     */
+    public static PostgreSQLContainer postgres() {
+        return new PostgreSQLContainer(POSTGRES)
+                .withCommand("postgres", "-c", "fsync=off", "-c", "track_commit_timestamp=on");
     }
 
     @Bean

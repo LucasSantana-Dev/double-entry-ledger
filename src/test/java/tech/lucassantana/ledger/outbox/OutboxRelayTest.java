@@ -95,27 +95,6 @@ class OutboxRelayTest {
     }
 
     @Test
-    void sequenceFollowsCommitOrderOfAnAccount() {
-        UUID a = openWith(100_00);
-        UUID b = openWith(0);
-        List<UUID> inCommitOrder = new ArrayList<>();
-        for (int i = 0; i < 10; i++) {
-            // Each call returns after its commit, so this list is the commit order on a and b.
-            boolean forward = i % 3 != 2;
-            inCommitOrder.add(service.transfer(key(), forward ? a : b, forward ? b : a, new Money(1_00))
-                    .transfer().getId());
-        }
-
-        List<UUID> bySequence = jdbc.sql("""
-                        select aggregate_id from outbox_events where aggregate_id in (:ids) order by id
-                        """)
-                .param("ids", inCommitOrder)
-                .query(UUID.class)
-                .list();
-        assertThat(bySequence).containsExactlyElementsOf(inCommitOrder);
-    }
-
-    @Test
     void onlyOneRelayWorksAtATime() throws Exception {
         UUID a = openWith(10_00);
         try (Connection other = dataSource.getConnection(); Statement sql = other.createStatement()) {
