@@ -4,7 +4,16 @@
 
 A money transfer service whose central guarantee is that money is never created, lost or duplicated, even with thousands of concurrent requests and clients retrying. The guarantee is proven by a test that hammers a real PostgreSQL and then audits the books, not by a claim in this README.
 
-Java 25 · Spring Boot 4.1 · Spring Data JPA · PostgreSQL 18 · Kafka · Flyway · Testcontainers · Toxiproxy · virtual threads
+Each phase adds a property and a test that proves it against real infrastructure in containers:
+
+1. Balances stay consistent under a concurrent, retrying workload: seven invariants checked in the database ([below](#what-the-tests-prove)).
+2. Four concurrency strategies benchmarked under load; the fastest one that never answers 503 is the default ([results](#benchmark-results)).
+3. Every transfer becomes exactly one Kafka event and one set of statement lines, through a broker outage, a cut database connection, a consumer crash and duplicate deliveries ([events](#events)).
+4. One trace follows a transfer from the HTTP request through the outbox to the statement consumer, the outbox and conflicts are metrics on a dashboard, and the service is deployed to Kubernetes in CI ([observability and deployment](#observability-and-deployment)).
+
+A longer account of the four phases: [article draft](docs/writeup/2026-11-16-ledger-consistency-under-concurrency-and-failure.md).
+
+Java 25 · Spring Boot 4.1 · Spring Data JPA · PostgreSQL 18 · Kafka · Flyway · Testcontainers · Toxiproxy · virtual threads · OpenTelemetry · Grafana · Docker · Kubernetes (kind)
 
 ## What the tests prove
 
@@ -52,6 +61,53 @@ Phase 3 invariants, asserted by tests:
 
 Phase 3 adds about 1 min 47 s to `./mvnw verify` locally (1 min 40 s to 3 min 27 s, 55 to 69 tests).
 
+## Observability and deployment
+
+**One trace per transfer, through the outbox.** The relay sends an event long after the request that wrote it has ended, on a scheduler thread, which is where traces usually break. Here the transfer transaction stores the current span's W3C `traceparent` in the outbox row (Flyway V5), and the relay opens its `outbox relay` span with that stored context as the parent. Kafka observation puts a `traceparent` header on the record, so the consumer span is a child of the send span. A row without a context (written while the request was not sampled, or before V5) gets a new root span and is published anyway ([ADR 0021](docs/adr/0021-tracing-micrometer-otel-and-outbox-traceparent.md)). Tracing uses Spring Boot's OpenTelemetry starter with OTLP export and `datasource-micrometer` for JDBC spans; no Java agent.
+
+![One transfer in Grafana Tempo: the HTTP server span, its SQL, the outbox relay span, the Kafka send and the statement consumer in one trace](docs/images/phase-4-trace.png)
+
+**Meters and what they tell** ([ADR 0022](docs/adr/0022-otel-lgtm-stack-metrics-and-logs.md)). None is tagged with an account, transfer or key id.
+
+| Meter | Tells |
+|---|---|
+| `ledger.outbox.pending`, `ledger.outbox.oldest.pending.age` | Events committed but not yet in Kafka, and how long the oldest has waited: the broker or the relay is stuck |
+| `ledger.outbox.parked` | Events Kafka rejected for good; each one is a transfer missing from the statement until someone acts |
+| `ledger.transfer.retries`, `ledger.transfer.unavailable` (tags `strategy`, `operation`) | Conflict retries and 503 answers per concurrency strategy, the phase 2 comparison on a running service |
+| `ledger.reconciliation.differences`, `ledger.reconciliation.last.success` | Differences found by the last scheduled reconciliation, and when it last completed, so a stalled schedule shows |
+| `ledger.statement.dead-lettered` | Events the statement could not apply, sent to `ledger.transfers.DLT` |
+| `http.server.requests` with a percentile histogram | Requests and p99 per status, as phase 2 reported latency |
+
+Logs are ECS JSON on the console with trace and span ids. The provisioned dashboard below was captured during a run of the smoke script in a loop plus random transfers (some for more than the balance, hence the 422s), with Kafka paused for 150 s (metrics are exported once a minute, so a shorter pause can fall between two samples): the pending outbox count and the oldest pending age climb while the broker is away and drop to zero when the relay drains.
+
+![The ledger dashboard in Grafana: requests and p99 by status, the outbox backlog during a Kafka pause and its drain, conflicts, consumer lag, reconciliation](docs/images/phase-4-dashboard.png)
+
+**Running it locally.** Needs Docker with about 2 GB free for the observability container on top of the application, PostgreSQL and Kafka.
+
+```bash
+docker compose up -d --build   # API on localhost:8080, Grafana on localhost:3000 (dashboard "Ledger")
+SQL_CMD="docker compose exec -T postgres psql -U ledger -d ledger -tAc" bash deploy/smoke.sh
+docker compose down -v
+```
+
+`grafana/otel-lgtm` (OpenTelemetry Collector, Prometheus, Tempo, Loki and Grafana in one image) is a demo backend, intended for development and testing; it is not how this would be monitored in production. Grafana opens without a login. Sampling is 1.0 in compose; the application default is 0.1.
+
+**Kubernetes.** A multi-stage `Dockerfile` (JDK 25 build, JRE 25 runtime, non-root) and Kustomize manifests: `deploy/k8s/base` with the application, PostgreSQL 18 and single-node KRaft Kafka StatefulSets, the topic setup, a ConfigMap and a Secret; `deploy/k8s/overlays/kind` for CI. Liveness and readiness come from the Actuator health groups. The [Deploy to kind](.github/workflows/deploy-kind.yml) workflow builds the image, creates a kind cluster, applies the overlay, waits for the rollouts and runs `deploy/smoke.sh`: two accounts, a deposit, a transfer, the balances over HTTP, then the transfer's two statement lines in the database ([ADR 0024](docs/adr/0024-kubernetes-on-kind-in-ci.md)). There is no public deployment; single-node Kafka and PostgreSQL are for the demo, not for availability.
+
+Phase 4 criteria, asserted by tests ([ADR 0023](docs/adr/0023-observability-tests.md)):
+
+| Criterion | Test |
+|---|---|
+| One committed transfer is one trace: HTTP server span, JDBC spans, relay span whose parent is the context stored in the outbox row, Kafka send, consumer span, in that parent order | `TracingTest`, spans captured in process from the real OpenTelemetry SDK |
+| The Kafka record carries a `traceparent` header of that trace | `TracingTest` |
+| A transfer committed while not sampled, or an outbox row without a `traceparent`, is still published and applied | `TracingTest` |
+| While Kafka is paused, pending and oldest pending age rise; after it resumes, pending returns to 0 | `ObservabilityMetricsTest`, Kafka paused through the Docker API |
+| Under optimistic and serializable with a hot account, retries are counted under the right `strategy` tag and `ledger.transfer.unavailable` equals the 503 responses | `ObservabilityMetricsTest` |
+| After a clean scheduled reconciliation, `ledger.reconciliation.differences` is 0 | `ReconciliationTest` |
+| A transfer's trace and a ledger metric reach a real backend over OTLP | `OtlpExportSmokeTest` with `LgtmStackContainer` |
+| The kind deployment rolls out and the smoke test passes | `deploy-kind.yml` |
+| The phase 1 and phase 3 invariants stay green for all four strategies, and the fault injection scenarios too | `ConcurrentTransfersInvariantTest`, `FaultInjectionTest` |
+
 ## Design decisions
 
 Each decision has an ADR with the options, the evidence and the consequences.
@@ -72,8 +128,13 @@ Each decision has an ADR with the options, the evidence and the consequences.
 | Consuming events | Statement projection, dedup table in the same transaction, scheduled reconciliation | [0017](docs/adr/0017-statement-projection-and-reconciliation.md) |
 | Event format | JSON envelope with Jackson 3, amounts in cents | [0018](docs/adr/0018-json-event-envelope.md) |
 | Fault injection | Toxiproxy for PostgreSQL, Docker pause for Kafka, test hooks | [0019](docs/adr/0019-fault-injection.md) |
+| Tracing | Boot's OpenTelemetry starter, Kafka observation, JDBC spans, `traceparent` stored in the outbox row | [0021](docs/adr/0021-tracing-micrometer-otel-and-outbox-traceparent.md) |
+| Metrics, logs, local stack | `grafana/otel-lgtm` in compose over OTLP, custom outbox, conflict and reconciliation meters, ECS JSON logs | [0022](docs/adr/0022-otel-lgtm-stack-metrics-and-logs.md) |
+| Observability tests | Spans and meters asserted in process, one OTLP smoke test with `LgtmStackContainer` | [0023](docs/adr/0023-observability-tests.md) |
+| Deployment | Dockerfile, Kustomize with PostgreSQL and KRaft Kafka StatefulSets, kind in GitHub Actions, no public link | [0024](docs/adr/0024-kubernetes-on-kind-in-ci.md) |
+| Write-up | Final README and an article draft in the repo | [0025](docs/adr/0025-results-write-up.md) |
 
-Market evidence behind the stack choices: [126 Brazilian Java job postings](docs/market/2026-11-13-gupy-java-sample.md), reproducible with `tools/market/gupy_java_sample.py`. For phase 3: [100 postings, messaging and resilience keywords](docs/market/2026-11-16-gupy-phase-3-keywords.md), `tools/market/gupy_phase3_keywords.py`.
+Market evidence behind the stack choices: [126 Brazilian Java job postings](docs/market/2026-11-13-gupy-java-sample.md), reproducible with `tools/market/gupy_java_sample.py`. For phase 3: [100 postings, messaging and resilience keywords](docs/market/2026-11-16-gupy-phase-3-keywords.md), `tools/market/gupy_phase3_keywords.py`. For phase 4: [100 postings, container, cloud, delivery and observability keywords](docs/market/2026-11-16-gupy-phase-4-keywords.md), `tools/market/gupy_phase4_keywords.py` (Docker 50%, Kubernetes 40%, observability or monitoring in any sense 46%, Grafana and tracing 10% each).
 
 ## API
 
@@ -99,11 +160,12 @@ curl -s localhost:8080/accounts/<id>
 
 ## Running
 
-Needs JDK 25 and Docker. Outside tests, the application expects PostgreSQL and a Kafka broker (`SPRING_KAFKA_BOOTSTRAP_SERVERS`).
+`./mvnw` needs JDK 25 and Docker; `docker compose` needs only Docker. Outside tests, the application expects PostgreSQL and a Kafka broker (`SPRING_KAFKA_BOOTSTRAP_SERVERS`).
 
 ```bash
 ./mvnw verify                  # build and all tests
 ./mvnw spring-boot:test-run    # API on :8080 with throwaway PostgreSQL and Kafka containers
+docker compose up -d --build   # API on :8080 plus Grafana on :3000, see Observability and deployment
 ```
 
 Bigger or different invariant runs:
@@ -155,4 +217,4 @@ One run on a GitHub-hosted runner (4 vCPU AMD EPYC 9V45, Java 25), 24 cells × 5
 | 1 | Accounts, deposits, transfers, idempotency, invariant test | done |
 | 2 | Benchmark four locking strategies and virtual vs platform threads under load | done |
 | 3 | Transactional outbox to Kafka, idempotent consumer, reconciliation, fault injection | done |
-| 4 | Traces and metrics, deployment, results write-up | planned |
+| 4 | Traces and metrics, deployment, results write-up | done |
