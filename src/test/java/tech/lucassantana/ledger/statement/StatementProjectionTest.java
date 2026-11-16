@@ -151,7 +151,7 @@ class StatementProjectionTest {
                 StandardCharsets.UTF_8)).isNotBlank();
         assertThat(jdbc.sql("select count(*) from statement.statement_lines where transfer_id = ?")
                 .param(broken).query(Long.class).single()).isZero();
-        assertThat(reconciliation.reconcile(Instant.now()).missingFromStatement()).contains(broken);
+        assertThat(reconciliation.reconcileAll(Instant.now()).missingFromStatement()).contains(broken);
     }
 
     /** The default partitioner's choice for a keyed record on the 3-partition topic. */

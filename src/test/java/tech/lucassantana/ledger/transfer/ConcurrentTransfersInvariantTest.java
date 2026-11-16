@@ -325,7 +325,7 @@ class ConcurrentTransfersInvariantTest {
         assertThat(count("select count(*) from statement.processed_events"))
                 .isEqualTo(count("select count(*) from outbox_events"));
 
-        ReconciliationReport report = reconciliation.reconcile(Instant.now());
+        ReconciliationReport report = reconciliation.reconcileAll(Instant.now());
         assertThat(report.isClean()).as("reconciliation %s", report).isTrue();
 
         assertThat(count("""
