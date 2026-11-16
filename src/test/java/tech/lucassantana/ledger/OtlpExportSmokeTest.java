@@ -33,13 +33,16 @@ import org.testcontainers.utility.DockerImageName;
  * over OTLP. The only test that starts {@code grafana/otel-lgtm}; every other check of traces and
  * meters runs in process.
  *
- * <p>Boot's test support switches metric and trace export off unless a test asks for it, which is
- * what keeps every other test quiet without a collector. This one asks, with
- * {@code @AutoConfigureMetrics} and {@code @AutoConfigureTracing}, and {@code @ServiceConnection}
- * points both exporters at the container. The context is closed afterwards so the container does
+ * <p>Boot's test support switches metric and trace export off unless a test asks for it, and
+ * application.properties switches the two OTLP exports off unless a collector is configured. This
+ * test asks for both, with {@code @AutoConfigureMetrics}, {@code @AutoConfigureTracing} and the two
+ * OTLP enabled properties, and {@code @ServiceConnection} points both exporters at the container. The context is closed afterwards so the container does
  * not stay up for the rest of the suite.
  */
 @SpringBootTest(webEnvironment = WebEnvironment.RANDOM_PORT, properties = {
+        // Off by default in application.properties, on wherever a collector exists.
+        "management.otlp.metrics.export.enabled=true",
+        "management.tracing.export.otlp.enabled=true",
         // Push often, so the test does not wait out the one minute default step.
         "management.otlp.metrics.export.step=1s",
         "management.opentelemetry.tracing.export.schedule-delay=200ms"})

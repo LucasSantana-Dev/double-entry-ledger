@@ -16,6 +16,9 @@ services:
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       MANAGEMENT_OPENTELEMETRY_TRACING_EXPORT_OTLP_ENDPOINT: http://lgtm:4318/v1/traces
       MANAGEMENT_OTLP_METRICS_EXPORT_URL: http://lgtm:4318/v1/metrics
+      # Both exports are off by default (application.properties).
+      MANAGEMENT_TRACING_EXPORT_OTLP_ENABLED: "true"
+      MANAGEMENT_OTLP_METRICS_EXPORT_ENABLED: "true"
       MANAGEMENT_TRACING_SAMPLING_PROBABILITY: "1.0"
     depends_on:
       postgres:
