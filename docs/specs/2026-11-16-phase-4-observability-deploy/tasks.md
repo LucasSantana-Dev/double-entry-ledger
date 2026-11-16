@@ -7,6 +7,6 @@
 - [x] `LgtmStackContainer` with `@ServiceConnection`; `OtlpExportSmokeTest`
 - [x] `compose.yaml` with `grafana/otel-lgtm` and the provisioned ledger dashboard
 - [x] `Dockerfile`; `deploy/k8s/base` and `overlays/kind`; kind workflow with the smoke script
-- [ ] Measure the CI cost and record it in ADR 0023
+- [x] Measure the CI cost and record it in ADR 0023
 - [x] README: phase 4 results, screenshots, decision rows 0021 to 0025, roadmap; article draft in `docs/writeup/`
-- [ ] Spec status done
+- [x] Spec status done
