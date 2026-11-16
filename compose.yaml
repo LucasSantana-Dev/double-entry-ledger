@@ -1,0 +1,77 @@
+# Local stack (ADR 0022): the application, PostgreSQL 18, single-node KRaft Kafka and the
+# grafana/otel-lgtm demo backend. API on localhost:8080, Grafana on localhost:3000.
+# The database credentials are demo values.
+name: double-entry-ledger
+
+services:
+  ledger:
+    build: .
+    image: double-entry-ledger:local
+    ports:
+      - "8080:8080"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/ledger
+      SPRING_DATASOURCE_USERNAME: ledger
+      SPRING_DATASOURCE_PASSWORD: ledger-demo-password
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      MANAGEMENT_OPENTELEMETRY_TRACING_EXPORT_OTLP_ENDPOINT: http://lgtm:4318/v1/traces
+      MANAGEMENT_OTLP_METRICS_EXPORT_URL: http://lgtm:4318/v1/metrics
+      MANAGEMENT_TRACING_SAMPLING_PROBABILITY: "1.0"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      lgtm:
+        condition: service_started
+
+  postgres:
+    # Same major and minor as the Testcontainers image (postgres:18-alpine).
+    image: postgres:18.7-alpine
+    environment:
+      POSTGRES_DB: ledger
+      POSTGRES_USER: ledger
+      POSTGRES_PASSWORD: ledger-demo-password
+    volumes:
+      - postgres-data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ledger -d ledger"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  kafka:
+    # Same version as the Testcontainers image.
+    image: apache/kafka:4.2.2
+    environment:
+      CLUSTER_ID: LVO65EWoRkquiTHIlaTYmQ
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@localhost:9093
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_HEAP_OPTS: -Xms512m -Xmx512m
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 > /dev/null"]
+      interval: 10s
+      timeout: 15s
+      retries: 12
+      start_period: 10s
+
+  lgtm:
+    # Demo backend: OpenTelemetry Collector, Prometheus, Tempo, Loki and Grafana in one image.
+    image: grafana/otel-lgtm:0.41.0
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./deploy/grafana/dashboards.yaml:/otel-lgtm/grafana/conf/provisioning/dashboards/ledger.yaml:ro
+      - ./deploy/grafana/dashboards:/otel-lgtm/ledger-dashboards:ro
+
+volumes:
+  postgres-data:

@@ -1,0 +1,11 @@
+# Grafana dashboard provider for the ledger dashboards (ADR 0022), mounted into otel-lgtm by
+# compose.yaml. Every JSON file in deploy/grafana/dashboards/ is loaded into the Ledger folder.
+apiVersion: 1
+providers:
+  - name: ledger
+    folder: Ledger
+    type: file
+    disableDeletion: true
+    allowUiUpdates: false
+    options:
+      path: /otel-lgtm/ledger-dashboards
