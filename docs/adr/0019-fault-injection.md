@@ -47,4 +47,6 @@ Local run, 2026-11-16, Windows 11 laptop, JDK 25, Docker Desktop, images already
 | After phase 3 | 69 | 3 min 27 s |
 | of which `FaultInjectionTest` alone | 4 | 50 s |
 
+On GitHub Actions (`ubuntu-latest`, PR #4, run 43926509075) the `verify` job took 3 min 32 s, about the same as the laptop.
+
 Phase 3 adds about 1 min 47 s: 50 s for the fault scenarios (most of it the broker pause, which waits for the producer's 8 s delivery timeout), the rest is a Kafka container per Spring test context and the invariant test draining 4,000 events per strategy into the statement. Inside the 2 to 4 minute estimate and below the 6 minute budget, so the fault tests stay in the default `verify`; no separate profile.
