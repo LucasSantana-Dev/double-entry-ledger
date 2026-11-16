@@ -302,7 +302,7 @@ class LedgerBenchmark {
                     app.metric("http.server.requests", "COUNT", "uri:/transfers", "status:201"),
                     app.metric("http.server.requests", "COUNT", "uri:/transfers", "status:409"),
                     app.metric("http.server.requests", "COUNT", "uri:/transfers", "status:503"),
-                    app.metric("ledger.transfer.retries", "COUNT"),
+                    app.metric("ledger.transfer.retries", "COUNT", "operation:transfer"),
                     queryLong(db, "select deadlocks from pg_stat_database where datname = current_database()"));
         }
     }

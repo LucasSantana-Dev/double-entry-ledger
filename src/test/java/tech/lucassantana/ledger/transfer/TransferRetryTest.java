@@ -131,7 +131,7 @@ class TransferRetryTest {
 
     /** No strategy property in this context, so the counters carry the default's tag (ADR 0020). */
     private double counter(String name) {
-        return meters.counter(name, "strategy", "conditional-update").count();
+        return meters.counter(name, "strategy", "conditional-update", "operation", "transfer").count();
     }
 
     private long rows(String sql, Object param) {

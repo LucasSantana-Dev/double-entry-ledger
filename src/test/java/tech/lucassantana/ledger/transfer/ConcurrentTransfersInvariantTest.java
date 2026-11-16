@@ -3,6 +3,7 @@ package tech.lucassantana.ledger.transfer;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 
+import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Duration;
 import java.time.Instant;
@@ -152,7 +153,8 @@ class ConcurrentTransfersInvariantTest {
      * deadlock that the bounded retry hid.
      */
     private static double retries(MeterRegistry meters) {
-        return meters.get("ledger.transfer.retries").counter().count();
+        // Transfers and deposits both run here: the sum over the operation tag.
+        return meters.get("ledger.transfer.retries").counters().stream().mapToDouble(Counter::count).sum();
     }
 
     // Set by verify() from the nested class's context, never from the enclosing class's.

@@ -120,8 +120,10 @@ class ObservabilityMetricsTest {
         UUID hot = openWith(service, accounts, 1_000_000_00);
         List<UUID> targets = List.of(openWith(service, accounts, 0), openWith(service, accounts, 0),
                 openWith(service, accounts, 0), openWith(service, accounts, 0));
-        Counter retries = meters.get("ledger.transfer.retries").tag("strategy", strategy).counter();
-        Counter unavailable = meters.get("ledger.transfer.unavailable").tag("strategy", strategy).counter();
+        Counter retries = meters.get("ledger.transfer.retries")
+                .tags("strategy", strategy, "operation", "transfer").counter();
+        Counter unavailable = meters.get("ledger.transfer.unavailable")
+                .tags("strategy", strategy, "operation", "transfer").counter();
         double retriesBefore = retries.count();
         double unavailableBefore = unavailable.count();
 
@@ -152,9 +154,11 @@ class ObservabilityMetricsTest {
                 .isPositive();
         assertThat(unavailable.count() - unavailableBefore).as("unavailable, statuses %s", byStatus)
                 .isEqualTo(byStatus.getOrDefault(503, 0L).doubleValue());
-        // One strategy per context, so no other tag value exists here.
+        // One strategy per context, so no other tag value exists here; one counter per operation.
         assertThat(meters.find("ledger.transfer.retries").counters())
-                .allSatisfy(c -> assertThat(c.getId().getTag("strategy")).isEqualTo(strategy));
+                .allSatisfy(c -> assertThat(c.getId().getTag("strategy")).isEqualTo(strategy))
+                .extracting(c -> c.getId().getTag("operation"))
+                .containsExactlyInAnyOrder("transfer", "deposit");
     }
 
     private static UUID openWith(TransferService service, AccountRepository accounts, long cents) {
