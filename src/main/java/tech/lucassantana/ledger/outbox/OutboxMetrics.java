@@ -47,15 +47,27 @@ public class OutboxMetrics {
         }
     }
 
-    /** Reads the three values in one statement; both partial indexes of the outbox serve it. */
+    /**
+     * Reads the three values in one statement. The pending partial index serves the pending count
+     * and the oldest pending row, taken as the lowest id (ids follow commit order, ADR 0016), so
+     * finding it reads one index entry instead of the whole backlog. The parked partial index
+     * serves the parked count. Both counts still read every matching index entry, so their cost
+     * grows with the backlog and the parked rows.
+     *
+     * <p>{@code occurred_at} is written with the application's clock and read against the
+     * database's, so the age is clamped at 0: clock skew between the two never gives a negative
+     * age. It reads 0 when nothing is pending.
+     */
     public void refresh() {
         last = jdbc.sql("""
                         select
                             (select count(*) from outbox_events
                              where published_at is null and parked_at is null) as pending,
-                            (select coalesce(extract(epoch from clock_timestamp() - min(occurred_at)), 0)
-                             from outbox_events
-                             where published_at is null and parked_at is null) as oldest_age,
+                            coalesce((select greatest(extract(epoch from clock_timestamp() - occurred_at), 0)
+                                      from outbox_events
+                                      where published_at is null and parked_at is null
+                                      order by id
+                                      limit 1), 0) as oldest_age,
                             (select count(*) from outbox_events where parked_at is not null) as parked
                         """)
                 .query((rs, row) -> new Snapshot(rs.getLong("pending"), rs.getDouble("oldest_age"),
