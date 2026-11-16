@@ -16,7 +16,7 @@ Tracing (ADR 0021) and metrics (ADR 0022) are only claims until a test shows the
 ## Evidence
 
 - `micrometer-tracing-test` provides `SimpleTracer`, `TracerAssert` and `SpansAssert` for in-process assertions ([Micrometer Tracing testing](https://docs.micrometer.io/tracing/reference/testing.html)). A Boot 4 `@SpringBootTest` recipe is not documented, so the wiring is settled during implementation, with an OpenTelemetry SDK in-memory exporter as the fallback.
-- Grafana says `otel-lgtm` starts in under 5 seconds since 2025 ([Grafana blog, 2025-07-08](https://grafana.com/blog/2025/07/08/observability-in-under-5-seconds-reflecting-on-a-year-of-grafana-otel-lgtm)), a vendor figure without an independent benchmark. The image is about 500 MB to pull in CI.
+- Grafana says `otel-lgtm` starts in under 5 seconds since 2025 ([Grafana blog, 2025-07-08](https://grafana.com/blog/2025/07/08/observability-in-under-5-seconds-reflecting-on-a-year-of-grafana-otel-lgtm)), a vendor figure without an independent benchmark. The pinned 0.40.0 image is about 956 MB compressed to pull in CI (measured during implementation, above the 500 MB first estimated).
 - A span check against the container has to poll Tempo until the batch exporter flushes, which is slower and can flake.
 
 ## Decision
