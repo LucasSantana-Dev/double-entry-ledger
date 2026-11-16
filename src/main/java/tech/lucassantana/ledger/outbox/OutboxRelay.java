@@ -142,10 +142,19 @@ public class OutboxRelay {
     }
 
     private void publish(List<Pending> batch) {
-        // Send everything first so the producer can batch, then wait in sequence order.
-        List<CompletableFuture<SendResult<String, LedgerEvent>>> sends = batch.stream().map(this::send).toList();
+        // Send everything first so the producer can batch, then wait in sequence order. A send
+        // that failed on the spot without being poison (no broker metadata within max.block.ms)
+        // stops the sending: each further send would block as long again.
+        List<CompletableFuture<SendResult<String, LedgerEvent>>> sends = new ArrayList<>();
+        for (Pending event : batch) {
+            CompletableFuture<SendResult<String, LedgerEvent>> send = send(event);
+            sends.add(send);
+            if (send.isCompletedExceptionally() && poison(send.exceptionNow()) == null) {
+                break;
+            }
+        }
         List<Long> published = new ArrayList<>();
-        for (int i = 0; i < batch.size(); i++) {
+        for (int i = 0; i < sends.size(); i++) {
             Pending event = batch.get(i);
             try {
                 sends.get(i).get(sendTimeout.toMillis(), TimeUnit.MILLISECONDS);
@@ -213,7 +222,11 @@ public class OutboxRelay {
                 .update();
     }
 
-    private void failed(List<Pending> unsent, Throwable cause) {
+    private void failed(List<Pending> unsent, Throwable error) {
+        Throwable cause = error;
+        while (cause.getCause() != null) {
+            cause = cause.getCause(); // the Kafka error, not Spring's wrapper
+        }
         log.warn("outbox relay could not publish {} events, retrying on the next tick: {}",
                 unsent.size(), cause.toString());
         jdbc.sql("""
