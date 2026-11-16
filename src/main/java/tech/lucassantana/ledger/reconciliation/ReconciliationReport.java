@@ -36,6 +36,15 @@ public record ReconciliationReport(
     public record AccountDifference(Instant window, UUID accountId, long ledgerCents, long statementCents) {
     }
 
+    /**
+     * Entries in all the difference lists: 0 exactly when the report is clean. A transfer can show
+     * up in more than one list (missing, and in its window), so this counts findings, not transfers.
+     */
+    public long differences() {
+        return parkedInOutbox.size() + missingFromStatement.size() + malformedInStatement.size()
+                + unknownInStatement.size() + windows.size() + accounts.size();
+    }
+
     /** No difference. Pending events are on their way, so they do not make a report dirty. */
     public boolean isClean() {
         return parkedInOutbox.isEmpty() && missingFromStatement.isEmpty() && malformedInStatement.isEmpty()

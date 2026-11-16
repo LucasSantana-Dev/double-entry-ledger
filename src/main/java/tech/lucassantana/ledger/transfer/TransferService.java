@@ -8,6 +8,7 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.function.Supplier;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.ConcurrencyFailureException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -37,7 +38,7 @@ public class TransferService {
 
     private final TransactionTemplate transaction;
     private final Counter retries;
-    private final Counter exhausted;
+    private final Counter unavailable;
     private final ConcurrencyStrategy concurrency;
     private final TransferRepository transfers;
     private final EntryRepository entries;
@@ -47,6 +48,7 @@ public class TransferService {
     TransferService(
             PlatformTransactionManager transactionManager,
             MeterRegistry meters,
+            @Value("${ledger.concurrency.strategy:conditional-update}") String strategyName,
             ConcurrencyStrategy concurrency,
             TransferRepository transfers,
             EntryRepository entries,
@@ -54,8 +56,15 @@ public class TransferService {
             OutboxWriter outbox) {
         this.transaction = new TransactionTemplate(transactionManager);
         this.transaction.setIsolationLevel(concurrency.isolationLevel());
-        this.retries = meters.counter("ledger.transfer.conflict.retries");
-        this.exhausted = meters.counter("ledger.transfer.conflict.exhausted");
+        // Tagged with the configured strategy (ADR 0022), so a dashboard compares strategies.
+        this.retries = Counter.builder("ledger.transfer.retries")
+                .description("Attempts retried after a concurrency conflict")
+                .tag("strategy", strategyName)
+                .register(meters);
+        this.unavailable = Counter.builder("ledger.transfer.unavailable")
+                .description("Requests answered 503 after the retries ran out")
+                .tag("strategy", strategyName)
+                .register(meters);
         this.concurrency = concurrency;
         this.transfers = transfers;
         this.entries = entries;
@@ -85,25 +94,30 @@ public class TransferService {
                 return transaction.execute(status -> attempt.get());
             } catch (ConcurrencyFailureException conflict) {
                 if (n == MAX_ATTEMPTS) {
-                    exhausted.increment();
-                    throw new ConcurrencyConflictException(n, conflict);
+                    throw unavailable(n, conflict);
                 }
                 retries.increment();
-                backoff(n, conflict);
+                try {
+                    backoff(n);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    throw unavailable(n, conflict);
+                }
             }
         }
     }
 
+    /** The exception the API answers with 503; counted here so the counter matches the responses. */
+    private ConcurrencyConflictException unavailable(int attempts, ConcurrencyFailureException conflict) {
+        unavailable.increment();
+        return new ConcurrencyConflictException(attempts, conflict);
+    }
+
     /** Exponential backoff with equal jitter: a random pause between half the ceiling and the ceiling. */
-    private static void backoff(int attempt, ConcurrencyFailureException conflict) {
+    private static void backoff(int attempt) throws InterruptedException {
         long ceiling = FIRST_BACKOFF.toNanos() << (attempt - 1);
         long pause = ceiling / 2 + ThreadLocalRandom.current().nextLong(ceiling / 2 + 1);
-        try {
-            Thread.sleep(Duration.ofNanos(pause));
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new ConcurrencyConflictException(attempt, conflict);
-        }
+        Thread.sleep(Duration.ofNanos(pause));
     }
 
     private TransferOutcome move(String key, Operation operation, UUID fromId, UUID toId, Money amount) {

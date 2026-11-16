@@ -69,8 +69,8 @@ class TransferRetryTest {
     void conflictOnEveryAttemptAnswers503AndWritesNothing() throws Exception {
         doThrow(new CannotAcquireLockException("conflict"))
                 .when(strategy).move(any(), any(), anyLong(), anyBoolean());
-        double exhaustedBefore = counter("ledger.transfer.conflict.exhausted");
-        double retriesBefore = counter("ledger.transfer.conflict.retries");
+        double unavailableBefore = counter("ledger.transfer.unavailable");
+        double retriesBefore = counter("ledger.transfer.retries");
         String key = UUID.randomUUID().toString();
 
         transfer(key)
@@ -79,8 +79,8 @@ class TransferRetryTest {
                 .andExpect(jsonPath("$.type").value("/problems/concurrency-conflict"));
 
         verify(strategy, times(TransferService.MAX_ATTEMPTS)).move(any(), any(), anyLong(), anyBoolean());
-        assertThat(counter("ledger.transfer.conflict.exhausted") - exhaustedBefore).isEqualTo(1);
-        assertThat(counter("ledger.transfer.conflict.retries") - retriesBefore)
+        assertThat(counter("ledger.transfer.unavailable") - unavailableBefore).isEqualTo(1);
+        assertThat(counter("ledger.transfer.retries") - retriesBefore)
                 .isEqualTo(TransferService.MAX_ATTEMPTS - 1);
         assertThat(rows("select count(*) from idempotency_keys where idempotency_key = ?", key)).isZero();
         assertThat(rows("select count(*) from transfers where from_account_id = ?", from)).isZero();
@@ -129,8 +129,9 @@ class TransferRetryTest {
         return UUID.fromString(JsonPath.read(body, "$.id"));
     }
 
+    /** No strategy property in this context, so the counters carry the default's tag (ADR 0020). */
     private double counter(String name) {
-        return meters.counter(name).count();
+        return meters.counter(name, "strategy", "conditional-update").count();
     }
 
     private long rows(String sql, Object param) {

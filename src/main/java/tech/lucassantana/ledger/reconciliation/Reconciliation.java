@@ -1,5 +1,7 @@
 package tech.lucassantana.ledger.reconciliation;
 
+import io.micrometer.core.instrument.Gauge;
+import io.micrometer.core.instrument.MeterRegistry;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.Duration;
@@ -9,6 +11,7 @@ import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicLong;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -44,8 +47,9 @@ public class Reconciliation {
     private final JdbcClient jdbc;
     private final Duration lag;
     private final Duration window;
+    private final AtomicLong lastDifferences = new AtomicLong();
 
-    Reconciliation(PlatformTransactionManager transactionManager, JdbcClient jdbc,
+    Reconciliation(PlatformTransactionManager transactionManager, JdbcClient jdbc, MeterRegistry meters,
             @Value("${ledger.reconciliation.lag-ms:60000}") long lagMs,
             @Value("${ledger.reconciliation.window-hours:24}") long windowHours) {
         // Every query of one report reads the same snapshot, so a transfer committing midway
@@ -56,6 +60,9 @@ public class Reconciliation {
         this.jdbc = jdbc;
         this.lag = Duration.ofMillis(lagMs);
         this.window = Duration.ofHours(windowHours);
+        Gauge.builder("ledger.reconciliation.differences", lastDifferences, AtomicLong::get)
+                .description("Differences found by the last reconciliation run, 0 when it was clean")
+                .register(meters);
     }
 
     @Scheduled(initialDelayString = "${ledger.reconciliation.interval-ms:60000}",
@@ -73,6 +80,7 @@ public class Reconciliation {
     /** Compares what happened in {@code [from, cutoff)}, logs one line and returns the report. */
     public ReconciliationReport reconcile(Instant from, Instant cutoff) {
         ReconciliationReport report = snapshot.execute(status -> compare(from, cutoff));
+        lastDifferences.set(report.differences());
         if (report.isClean()) {
             log.info("reconciliation clean from {} to {}: {} transfers in ledger and statement, {} pending in outbox",
                     from, cutoff, report.ledgerTransfers(), report.pendingInOutbox().size());
