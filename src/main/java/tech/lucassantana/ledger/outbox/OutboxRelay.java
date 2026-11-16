@@ -1,11 +1,15 @@
 package tech.lucassantana.ledger.outbox;
 
+import io.micrometer.tracing.Span;
+import io.micrometer.tracing.Tracer;
+import io.micrometer.tracing.propagation.Propagator;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
@@ -34,6 +38,11 @@ import tools.jackson.databind.json.JsonMapper;
  * advisory lock, claim the oldest pending rows, send them, wait for every acknowledgement, mark
  * the acknowledged rows published. Delivery is at least once: if the transaction fails after a
  * send (crash, lost connection), the rows stay pending and are sent again.
+ *
+ * <p>Each row is sent inside its own span whose parent is the trace context stored in the row
+ * (ADR 0021), so the Kafka send and the consumer join the trace of the request that wrote it. A
+ * row without a context is sent in a new trace. Tracing never holds a row back: if the context
+ * cannot be restored, the row is sent without it.
  */
 @Component
 public class OutboxRelay {
@@ -54,7 +63,7 @@ public class OutboxRelay {
             JacksonException.class);
 
     private record Pending(long id, UUID eventId, String aggregateType, UUID aggregateId, String eventType,
-            int schemaVersion, String payload, Instant occurredAt) {
+            int schemaVersion, String payload, Instant occurredAt, String traceparent) {
     }
 
     private final TransactionTemplate transaction;
@@ -65,6 +74,8 @@ public class OutboxRelay {
     private final int batchSize;
     private final Duration sendTimeout;
     private final Duration retention;
+    private final Tracer tracer;
+    private final Propagator propagator;
     private volatile Runnable afterSendHook = () -> { };
 
     OutboxRelay(
@@ -72,6 +83,8 @@ public class OutboxRelay {
             JdbcClient jdbc,
             KafkaTemplate<String, LedgerEvent> kafka,
             JsonMapper json,
+            Tracer tracer,
+            Propagator propagator,
             @Value("${ledger.outbox.topic}") String topic,
             @Value("${ledger.outbox.relay.batch-size:500}") int batchSize,
             @Value("${ledger.outbox.relay.send-timeout-ms:10000}") long sendTimeoutMs,
@@ -84,6 +97,8 @@ public class OutboxRelay {
         this.batchSize = batchSize;
         this.sendTimeout = Duration.ofMillis(sendTimeoutMs);
         this.retention = Duration.ofDays(retentionDays);
+        this.tracer = tracer;
+        this.propagator = propagator;
     }
 
     /** Drains the backlog batch by batch; a failure ends this tick and the next one retries. */
@@ -124,7 +139,7 @@ public class OutboxRelay {
     private List<Pending> claim() {
         return jdbc.sql("""
                         select id, event_id, aggregate_type, aggregate_id, event_type, schema_version,
-                               payload::text as payload, occurred_at
+                               payload::text as payload, occurred_at, traceparent
                         from outbox_events
                         where published_at is null and parked_at is null
                         order by id
@@ -140,7 +155,8 @@ public class OutboxRelay {
                         rs.getString("event_type"),
                         rs.getInt("schema_version"),
                         rs.getString("payload"),
-                        rs.getObject("occurred_at", OffsetDateTime.class).toInstant()))
+                        rs.getObject("occurred_at", OffsetDateTime.class).toInstant(),
+                        rs.getString("traceparent")))
                 .list();
     }
 
@@ -192,13 +208,41 @@ public class OutboxRelay {
     }
 
     private CompletableFuture<SendResult<String, LedgerEvent>> send(Pending event) {
-        try {
+        Span span = relaySpan(event);
+        try (Tracer.SpanInScope scope = tracer.withSpan(span)) {
+            // The Kafka template's observation takes the span in scope as its parent and writes
+            // the traceparent header from its own producer span.
             LedgerEvent envelope = new LedgerEvent(event.eventId(), event.eventType(), event.schemaVersion(),
                     event.occurredAt(), event.aggregateType(), event.aggregateId(), event.id(),
                     json.readTree(event.payload()));
             return kafka.send(topic, event.aggregateId().toString(), envelope);
         } catch (RuntimeException e) {
+            if (span != null) {
+                span.error(e);
+            }
             return CompletableFuture.failedFuture(e);
+        } finally {
+            if (span != null) {
+                span.end();
+            }
+        }
+    }
+
+    /**
+     * A span for sending one row: child of the row's stored context, or a new root when the row
+     * has none. Null when tracing fails, so the row goes out untraced instead of not at all.
+     */
+    private Span relaySpan(Pending event) {
+        try {
+            Span.Builder builder = event.traceparent() == null
+                    ? tracer.spanBuilder().setNoParent()
+                    : propagator.extract(Map.of(OutboxWriter.TRACEPARENT, event.traceparent()), Map::get);
+            return builder.name("outbox relay")
+                    .tag("ledger.outbox.sequence", String.valueOf(event.id()))
+                    .start();
+        } catch (RuntimeException e) {
+            log.debug("outbox event {} sent without trace context: {}", event.eventId(), e.toString());
+            return null;
         }
     }
 
