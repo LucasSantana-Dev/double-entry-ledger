@@ -29,8 +29,9 @@ Option 1, decided by the repo owner.
 - Metrics and traces over OTLP to the collector; logs as ECS JSON on the console with trace and span ids. No OTLP log export.
 - Custom meters, none tagged with an account, transfer or key id:
   - outbox: `ledger.outbox.pending`, `ledger.outbox.oldest.pending.age` (seconds), `ledger.outbox.parked`;
-  - conflicts: `ledger.transfer.retries` and `ledger.transfer.unavailable` (the 503s), tagged `strategy`;
-  - reconciliation and dead letters: `ledger.reconciliation.differences` from the last run, and the existing `ledger.statement.dead-lettered`.
+  - conflicts: `ledger.transfer.retries` and `ledger.transfer.unavailable` (the 503s), tagged `strategy` and `operation` (`transfer` or `deposit`);
+  - reconciliation and dead letters: `ledger.reconciliation.differences` from the last scheduled run (a manual or test call over another range leaves it alone), `ledger.reconciliation.last.success` (epoch seconds of the last scheduled run that completed, so a stalled schedule is visible), and the existing `ledger.statement.dead-lettered`.
+- Amended 2026-11-16 after review, decided by the repo owner: the `operation` tag, the last success gauge, and the differences gauge following the scheduled run only.
 - The outbox gauges come from one query per scheduled refresh, not one per export.
 - `http.server.requests` with a percentile histogram, so p99 per status matches how phase 2 reported latency.
 - One provisioned dashboard for the ledger story (requests by status and p99, outbox, conflicts by strategy, consumer lag, reconciliation, dead letters) next to the stock JVM panels.
