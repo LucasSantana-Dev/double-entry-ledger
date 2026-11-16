@@ -1,0 +1,552 @@
+{
+  "uid": "ledger",
+  "title": "Ledger",
+  "tags": [
+    "ledger"
+  ],
+  "timezone": "browser",
+  "schemaVersion": 41,
+  "version": 1,
+  "editable": false,
+  "refresh": "30s",
+  "time": {
+    "from": "now-30m",
+    "to": "now"
+  },
+  "description": "Double-entry ledger: requests, outbox, conflicts, statement and reconciliation (ADR 0022).",
+  "panels": [
+    {
+      "id": 1,
+      "type": "row",
+      "title": "HTTP",
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 1
+      },
+      "panels": []
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "Requests per second by status",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 1,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "sum by (status) (rate(http_server_requests_milliseconds_count{job=\"double-entry-ledger\", uri!~\"/actuator.*\"}[$__rate_interval]))",
+          "legendFormat": "{{status}}",
+          "range": true,
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "options": {},
+      "description": "http.server.requests, Actuator endpoints excluded."
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "p99 latency by status",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 1,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.99, sum by (le, status) (rate(http_server_requests_milliseconds_bucket{job=\"double-entry-ledger\", uri!~\"/actuator.*\"}[$__rate_interval])))",
+          "legendFormat": "{{status}}",
+          "range": true,
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms"
+        },
+        "overrides": []
+      },
+      "options": {},
+      "description": "From the http.server.requests percentile histogram (ADR 0022), as phase 2 reported latency per status."
+    },
+    {
+      "id": 4,
+      "type": "row",
+      "title": "Outbox",
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 9,
+        "w": 24,
+        "h": 1
+      },
+      "panels": []
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "Outbox pending and parked",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 10,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "ledger_outbox_pending{job=\"double-entry-ledger\"}",
+          "legendFormat": "pending",
+          "range": true,
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        },
+        {
+          "expr": "ledger_outbox_parked{job=\"double-entry-ledger\"}",
+          "legendFormat": "parked",
+          "range": true,
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {},
+      "description": "Rows waiting for the relay, and rows Kafka rejected for good (ADR 0016)."
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "Oldest pending outbox row age",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 10,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "ledger_outbox_oldest_pending_age_seconds{job=\"double-entry-ledger\"}",
+          "legendFormat": "oldest pending",
+          "range": true,
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "options": {},
+      "description": "0 when nothing is pending. Rises during a Kafka outage."
+    },
+    {
+      "id": 7,
+      "type": "row",
+      "title": "Conflicts",
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 18,
+        "w": 24,
+        "h": 1
+      },
+      "panels": []
+    },
+    {
+      "id": 8,
+      "type": "timeseries",
+      "title": "Retries per second by strategy and operation",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 19,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "sum by (strategy, operation) (rate(ledger_transfer_retries_total{job=\"double-entry-ledger\"}[$__rate_interval]))",
+          "legendFormat": "{{strategy}} {{operation}}",
+          "range": true,
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops"
+        },
+        "overrides": []
+      },
+      "options": {},
+      "description": "Attempts retried after a concurrency conflict (ADR 0010)."
+    },
+    {
+      "id": 9,
+      "type": "timeseries",
+      "title": "503 responses per second by strategy and operation",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 19,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "sum by (strategy, operation) (rate(ledger_transfer_unavailable_total{job=\"double-entry-ledger\"}[$__rate_interval]))",
+          "legendFormat": "{{strategy}} {{operation}}",
+          "range": true,
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "options": {},
+      "description": "Requests answered 503 after the bounded retries ran out."
+    },
+    {
+      "id": 10,
+      "type": "row",
+      "title": "Statement and reconciliation",
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 27,
+        "w": 24,
+        "h": 1
+      },
+      "panels": []
+    },
+    {
+      "id": 11,
+      "type": "timeseries",
+      "title": "Kafka consumer lag",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 28,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "sum(max by (partition) (kafka_consumer_fetch_manager_records_lag{job=\"double-entry-ledger\"}))",
+          "legendFormat": "statement consumer",
+          "range": true,
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {},
+      "description": "Records the statement consumer has not read yet, summed over partitions. The Kafka client reports each partition twice, with the topic name as is and with dots replaced, so the series are deduplicated per partition first."
+    },
+    {
+      "id": 12,
+      "type": "timeseries",
+      "title": "Statement events per second",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 28,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(ledger_statement_applied_total{job=\"double-entry-ledger\"}[$__rate_interval]))",
+          "legendFormat": "applied",
+          "range": true,
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        },
+        {
+          "expr": "sum(rate(ledger_statement_duplicates_total{job=\"double-entry-ledger\"}[$__rate_interval]))",
+          "legendFormat": "duplicates",
+          "range": true,
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        },
+        {
+          "expr": "sum(rate(ledger_statement_dead_lettered_total{job=\"double-entry-ledger\"}[$__rate_interval]))",
+          "legendFormat": "dead-lettered",
+          "range": true,
+          "refId": "C",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops"
+        },
+        "overrides": []
+      },
+      "options": {},
+      "description": "Events applied to the statement, skipped as duplicates, and sent to the dead letter topic (ADR 0017)."
+    },
+    {
+      "id": 13,
+      "type": "stat",
+      "title": "Reconciliation differences",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 36,
+        "w": 6,
+        "h": 6
+      },
+      "targets": [
+        {
+          "expr": "ledger_reconciliation_differences{job=\"double-entry-ledger\"}",
+          "legendFormat": "differences",
+          "range": true,
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto"
+      },
+      "description": "What the last scheduled reconciliation found; 0 when clean."
+    },
+    {
+      "id": 14,
+      "type": "stat",
+      "title": "Time since last reconciliation",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 6,
+        "y": 36,
+        "w": 6,
+        "h": 6
+      },
+      "targets": [
+        {
+          "expr": "time() - ledger_reconciliation_last_success_seconds{job=\"double-entry-ledger\"}",
+          "legendFormat": "since last run",
+          "range": true,
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 180
+              },
+              {
+                "color": "red",
+                "value": 600
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto"
+      },
+      "description": "Since the last scheduled reconciliation run completed. The schedule runs every minute by default."
+    },
+    {
+      "id": 15,
+      "type": "table",
+      "title": "Recent transfer traces",
+      "datasource": {
+        "type": "tempo",
+        "uid": "tempo"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 36,
+        "w": 12,
+        "h": 6
+      },
+      "targets": [
+        {
+          "queryType": "traceql",
+          "query": "{resource.service.name=\"double-entry-ledger\" && name=~\".*/transfers\"}",
+          "limit": 20,
+          "tableType": "traces",
+          "refId": "A",
+          "datasource": {
+            "type": "tempo",
+            "uid": "tempo"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {},
+      "description": "Open a trace to follow a transfer from the HTTP request through the outbox relay to the statement consumer (ADR 0021)."
+    }
+  ],
+  "templating": {
+    "list": []
+  },
+  "annotations": {
+    "list": []
+  },
+  "links": [
+    {
+      "title": "Explore traces in Tempo",
+      "type": "link",
+      "icon": "external link",
+      "targetBlank": true,
+      "url": "/explore?schemaVersion=1&panes=%7B%22t%22:%7B%22datasource%22:%22tempo%22,%22queries%22:%5B%7B%22refId%22:%22A%22,%22datasource%22:%7B%22type%22:%22tempo%22,%22uid%22:%22tempo%22%7D,%22queryType%22:%22traceqlSearch%22%7D%5D,%22range%22:%7B%22from%22:%22now-1h%22,%22to%22:%22now%22%7D%7D%7D&orgId=1"
+    }
+  ]
+}
