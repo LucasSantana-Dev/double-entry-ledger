@@ -18,8 +18,8 @@ Every committed transfer becomes exactly one event on Kafka, and a consumer turn
 3. Poison messages: a non-retriable send failure parks the row (`parked_at`, `last_error`); the relay continues with the next rows.
 4. Outbox cleanup: an hourly job deletes rows published more than 7 days ago; parked and unpublished rows are kept.
 5. Event format (ADR 0018): JSON envelope `eventId`, `eventType`, `schemaVersion`, `occurredAt`, `aggregateType`, `aggregateId`, `sequence`, `payload` (`transferId`, `fromAccountId`, `toAccountId`, `amountCents`), through Spring for Apache Kafka's Jackson 3 serializers.
-6. Statement projection (ADR 0017): schema `statement` (Flyway V4) with `processed_events` (event id primary key) and `statement_lines` (one line per account per event), written by a `@KafkaListener` in one transaction. Duplicates are detected by the event id and skipped. Lines are ordered by `sequence`.
-7. Reconciliation (ADR 0017): scheduled every minute over transfers older than 60 s; reports transfers missing from the statement, transfers with other than two lines, lines without a transfer, per-hour count and credited-sum differences, and per-account differences inside differing windows. Logs one line and returns a `ReconciliationReport`.
+6. Statement projection (ADR 0017): schema `statement` (Flyway V4) with `processed_events` (event id primary key) and `statement_lines` (one line per account per event), written by a `@KafkaListener` in one transaction. Duplicates are detected by the event id and skipped. Lines are ordered by `sequence`. Database outages are retried without a limit; an event that cannot be applied is retried three times, then sent to `ledger.transfers.DLT`.
+7. Reconciliation (ADR 0017): scheduled every minute over a 24 hour sliding window ending 60 s ago (`reconcileAll` for the whole history); transfers whose event is still in the outbox are reported apart as pending or parked and left out of the comparison; reports transfers missing from the statement, transfers with other than two lines, lines without a transfer, per-hour count and credited-sum differences, and per-account differences inside differing windows. Logs one line and returns a `ReconciliationReport`.
 8. Fault injection (ADR 0019): Toxiproxy between the application and PostgreSQL, Kafka paused through the Docker API, a hook that crashes the consumer after its database commit, a forced re-send of published events.
 
 Out of scope: a statement HTTP endpoint, a separate consumer service or database, Debezium, Kafka transactions, Avro or Protobuf, ShedLock and several application instances, retention of `processed_events`, metrics and traces (phase 4).
@@ -42,7 +42,7 @@ Plus the seven phase 1 invariants, unchanged, for all four concurrency strategie
 | 2 | `ConcurrentTransfersInvariantTest` (drain after the workload), `OutboxRelayTest`, `FaultInjectionTest` |
 | 3 | `StatementProjectionTest` (re-sent and crashed deliveries), `FaultInjectionTest` |
 | 4 | `ConcurrentTransfersInvariantTest`, `ReconciliationTest`, `FaultInjectionTest` |
-| 5 | `ConcurrentTransfersInvariantTest`: per account, lines in sequence order have non-decreasing transfer timestamps and a running balance that never goes below zero for customers; `StatementProjectionTest`: out-of-order delivery still yields sequence order |
+| 5 | `ConcurrentTransfersInvariantTest`, all four strategies under concurrent load: with `track_commit_timestamp=on`, per account, lines in sequence order never go back in the commit time PostgreSQL recorded for the transfer's transaction (`pg_xact_commit_timestamp(xmin)`), and a customer's running balance never goes below zero; the same check over a random order must fail, so it is not vacuous. `StatementProjectionTest`: out-of-order delivery still yields sequence order. Single-threaded tests are not evidence for this invariant: any implementation passes them |
 
 ## Decisions
 

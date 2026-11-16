@@ -27,6 +27,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.jdbc.core.simple.JdbcClient;
+import tech.lucassantana.ledger.StatementOrder;
 import tech.lucassantana.ledger.TestcontainersConfiguration;
 import tech.lucassantana.ledger.account.Account;
 import tech.lucassantana.ledger.account.AccountRepository;
@@ -313,8 +314,8 @@ class ConcurrentTransfersInvariantTest {
     /**
      * The relay drains, the statement applies every event once, reconciliation is clean, every
      * statement balance equals the ledger balance, and each account's lines in sequence order
-     * follow its commit order: timestamps never go back and a customer's running balance never
-     * dips below zero, which a debit placed before the credit that funded it would cause.
+     * follow the commit order PostgreSQL recorded for the concurrent transactions (see
+     * {@link StatementOrder}).
      */
     private void assertEventsReachTheStatement(Reconciliation reconciliation) {
         await().atMost(Duration.ofSeconds(120)).untilAsserted(() -> {
@@ -333,16 +334,9 @@ class ConcurrentTransfersInvariantTest {
                 where a.balance_cents <> coalesce(
                     (select sum(l.amount_cents) from statement.statement_lines l where l.account_id = a.id), 0)
                 """)).isZero();
-        assertThat(count("""
-                select count(*) from (
-                    select a.kind,
-                           sum(l.amount_cents) over (partition by l.account_id order by l.sequence) as running,
-                           l.occurred_at < lag(l.occurred_at) over (partition by l.account_id order by l.sequence)
-                               as went_back
-                    from statement.statement_lines l join accounts a on a.id = l.account_id
-                ) ordered
-                where (ordered.kind = 'CUSTOMER' and ordered.running < 0) or ordered.went_back
-                """)).isZero();
+        assertThat(StatementOrder.violationsBySequence(jdbc)).as("lines out of commit order").isZero();
+        // Read in an order unrelated to commit order, the same check fails: it is not vacuous.
+        assertThat(StatementOrder.violations(jdbc, "l.transfer_id")).as("violations in random order").isPositive();
     }
 
     /** Random transfers between the accounts; a share hits one hot account, a share is sent twice in a row. */
