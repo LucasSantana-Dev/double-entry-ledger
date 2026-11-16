@@ -1,9 +1,11 @@
 package tech.lucassantana.ledger.transfer;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
 
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -31,6 +33,8 @@ import tech.lucassantana.ledger.account.AccountRepository;
 import tech.lucassantana.ledger.account.InsufficientFundsException;
 import tech.lucassantana.ledger.idempotency.IdempotencyKeyInProgressException;
 import tech.lucassantana.ledger.money.Money;
+import tech.lucassantana.ledger.reconciliation.Reconciliation;
+import tech.lucassantana.ledger.reconciliation.ReconciliationReport;
 
 /**
  * The phase 1 acceptance test: throws thousands of concurrent transfers at a real PostgreSQL,
@@ -77,10 +81,11 @@ class ConcurrentTransfersInvariantTest {
 
         @Test
         void ledgerStaysConsistent(@Autowired TransferService service, @Autowired AccountRepository accounts,
-                @Autowired JdbcClient jdbc, @Autowired ConcurrencyStrategy strategy, @Autowired MeterRegistry meters)
+                @Autowired JdbcClient jdbc, @Autowired ConcurrencyStrategy strategy, @Autowired MeterRegistry meters,
+                @Autowired Reconciliation reconciliation)
                 throws InterruptedException {
             assertThat(strategy).isInstanceOf(PessimisticStrategy.class);
-            verify(service, accounts, jdbc, "pessimistic");
+            verify(service, accounts, jdbc, reconciliation, "pessimistic");
             assertNoRetries(meters);
         }
     }
@@ -91,10 +96,11 @@ class ConcurrentTransfersInvariantTest {
 
         @Test
         void ledgerStaysConsistent(@Autowired TransferService service, @Autowired AccountRepository accounts,
-                @Autowired JdbcClient jdbc, @Autowired ConcurrencyStrategy strategy, @Autowired MeterRegistry meters)
+                @Autowired JdbcClient jdbc, @Autowired ConcurrencyStrategy strategy, @Autowired MeterRegistry meters,
+                @Autowired Reconciliation reconciliation)
                 throws InterruptedException {
             assertThat(strategy).isInstanceOf(ConditionalUpdateStrategy.class);
-            verify(service, accounts, jdbc, "conditional-update");
+            verify(service, accounts, jdbc, reconciliation, "conditional-update");
             assertNoRetries(meters);
         }
     }
@@ -105,10 +111,11 @@ class ConcurrentTransfersInvariantTest {
 
         @Test
         void ledgerStaysConsistent(@Autowired TransferService service, @Autowired AccountRepository accounts,
-                @Autowired JdbcClient jdbc, @Autowired ConcurrencyStrategy strategy, @Autowired MeterRegistry meters)
+                @Autowired JdbcClient jdbc, @Autowired ConcurrencyStrategy strategy, @Autowired MeterRegistry meters,
+                @Autowired Reconciliation reconciliation)
                 throws InterruptedException {
             assertThat(strategy).isInstanceOf(OptimisticStrategy.class);
-            verify(service, accounts, jdbc, "optimistic");
+            verify(service, accounts, jdbc, reconciliation, "optimistic");
             // The workload must really have produced version conflicts, or the run proves nothing
             // about the retry path.
             assertThat(meters.counter("ledger.transfer.conflict.retries").count()).as("conflict retries").isPositive();
@@ -121,10 +128,11 @@ class ConcurrentTransfersInvariantTest {
 
         @Test
         void ledgerStaysConsistent(@Autowired TransferService service, @Autowired AccountRepository accounts,
-                @Autowired JdbcClient jdbc, @Autowired ConcurrencyStrategy strategy, @Autowired MeterRegistry meters)
+                @Autowired JdbcClient jdbc, @Autowired ConcurrencyStrategy strategy, @Autowired MeterRegistry meters,
+                @Autowired Reconciliation reconciliation)
                 throws InterruptedException {
             assertThat(strategy).isInstanceOf(SerializableStrategy.class);
-            verify(service, accounts, jdbc, "serializable");
+            verify(service, accounts, jdbc, reconciliation, "serializable");
             // Pooled connections went back to the default level: only transfers run serializable.
             assertThat(jdbcIsolation(jdbc)).isEqualTo("read committed");
             // The workload must really have produced serialization failures, or the run proves
@@ -150,8 +158,8 @@ class ConcurrentTransfersInvariantTest {
     private AccountRepository accounts;
     private JdbcClient jdbc;
 
-    private void verify(TransferService service, AccountRepository accounts, JdbcClient jdbc, String strategy)
-            throws InterruptedException {
+    private void verify(TransferService service, AccountRepository accounts, JdbcClient jdbc,
+            Reconciliation reconciliation, String strategy) throws InterruptedException {
         this.service = service;
         this.accounts = accounts;
         this.jdbc = jdbc;
@@ -250,6 +258,9 @@ class ConcurrentTransfersInvariantTest {
         // requested accounts and amounts, and each final balance is what those transfers imply.
         assertMatchesClientModel(ids, submissions, outcomesByKey, created);
 
+        // Phase 3 invariants 2 to 5 on the same workload.
+        assertEventsReachTheStatement(reconciliation);
+
         System.out.printf(
                 "invariant run (%s, seed %d): %d submissions over %d keys in %d ms -> %d created, %d replayed, "
                         + "%d insufficient funds, %d x 409 and %d x 503 retried, 0 invariant violations%n",
@@ -297,6 +308,41 @@ class ConcurrentTransfersInvariantTest {
                         .param(id).query(Long.class).single())
                 .as("balance of %s", id)
                 .isEqualTo(expectedBalance.get(id)));
+    }
+
+    /**
+     * The relay drains, the statement applies every event once, reconciliation is clean, every
+     * statement balance equals the ledger balance, and each account's lines in sequence order
+     * follow its commit order: timestamps never go back and a customer's running balance never
+     * dips below zero, which a debit placed before the credit that funded it would cause.
+     */
+    private void assertEventsReachTheStatement(Reconciliation reconciliation) {
+        await().atMost(Duration.ofSeconds(120)).untilAsserted(() -> {
+            assertThat(count("select count(*) from outbox_events where published_at is null")).isZero();
+            assertThat(count("select count(*) from statement.statement_lines"))
+                    .isEqualTo(2 * count("select count(*) from transfers"));
+        });
+        assertThat(count("select count(*) from statement.processed_events"))
+                .isEqualTo(count("select count(*) from outbox_events"));
+
+        ReconciliationReport report = reconciliation.reconcile(Instant.now());
+        assertThat(report.isClean()).as("reconciliation %s", report).isTrue();
+
+        assertThat(count("""
+                select count(*) from accounts a
+                where a.balance_cents <> coalesce(
+                    (select sum(l.amount_cents) from statement.statement_lines l where l.account_id = a.id), 0)
+                """)).isZero();
+        assertThat(count("""
+                select count(*) from (
+                    select a.kind,
+                           sum(l.amount_cents) over (partition by l.account_id order by l.sequence) as running,
+                           l.occurred_at < lag(l.occurred_at) over (partition by l.account_id order by l.sequence)
+                               as went_back
+                    from statement.statement_lines l join accounts a on a.id = l.account_id
+                ) ordered
+                where (ordered.kind = 'CUSTOMER' and ordered.running < 0) or ordered.went_back
+                """)).isZero();
     }
 
     /** Random transfers between the accounts; a share hits one hot account, a share is sent twice in a row. */
