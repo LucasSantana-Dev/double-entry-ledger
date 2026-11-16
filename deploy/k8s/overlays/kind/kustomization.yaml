@@ -1,0 +1,17 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+# The CI cluster (ADR 0024): the image is built on the runner and loaded with `kind load`,
+# so it is never pulled from a registry.
+resources:
+  - ../../base
+images:
+  - name: double-entry-ledger
+    newTag: kind
+patches:
+  - target:
+      kind: Deployment
+      name: ledger
+    patch: |-
+      - op: add
+        path: /spec/template/spec/containers/0/imagePullPolicy
+        value: Never
