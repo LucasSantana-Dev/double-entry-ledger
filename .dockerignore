@@ -1,0 +1,7 @@
+# Only the Maven wrapper, the POM and src/ reach the build stage.
+*
+!.mvn/wrapper/maven-wrapper.properties
+!mvnw
+!pom.xml
+!src/
+src/benchmark/
