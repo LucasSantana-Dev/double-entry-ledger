@@ -47,10 +47,18 @@ jobs:
       - name: Smoke test
         run: |
           kubectl -n ledger port-forward service/ledger 8080:8080 > port-forward.log 2>&1 &
+          ready=false
           for _ in $(seq 1 30); do
-            curl -sf http://localhost:8080/actuator/health/readiness > /dev/null && break
+            if curl -sf --max-time 5 http://localhost:8080/actuator/health/readiness > /dev/null; then
+              ready=true
+              break
+            fi
             sleep 1
           done
+          if [ "$ready" != true ]; then
+            echo "::error::the ledger was not ready through the port-forward after 30 attempts"
+            exit 1
+          fi
           deploy/smoke.sh
       - name: Dump cluster state
         if: failure()

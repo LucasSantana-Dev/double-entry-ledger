@@ -7,11 +7,13 @@
 #   SQL_CMD    a command that runs one SQL statement given as its last argument and prints the
 #              bare result (default: psql inside the postgres pod of the kind deployment)
 #   STATEMENT_TIMEOUT_SECONDS  how long to wait for the statement lines (default 60)
+#   CURL_MAX_TIME  how long one HTTP call may take, in seconds (default 10)
 set -euo pipefail
 
 BASE_URL="${BASE_URL:-http://localhost:8080}"
 SQL_CMD="${SQL_CMD:-kubectl -n ledger exec postgres-0 -- psql -U ledger -d ledger -tAc}"
 STATEMENT_TIMEOUT_SECONDS="${STATEMENT_TIMEOUT_SECONDS:-60}"
+CURL_MAX_TIME="${CURL_MAX_TIME:-10}"
 RUN_ID="smoke-$(date +%s)-$RANDOM"
 
 fail() {
@@ -27,7 +29,7 @@ field() {
 # POST with an Idempotency-Key; prints the body, fails on any status but 201.
 post() {
   local path="$1" key="$2" body="$3" response status
-  response=$(curl -sS -w '\n%{http_code}' -X POST "$BASE_URL$path" \
+  response=$(curl -sS --max-time "$CURL_MAX_TIME" -w '\n%{http_code}' -X POST "$BASE_URL$path" \
     -H "Idempotency-Key: $key" -H 'Content-Type: application/json' -d "$body")
   status="${response##*$'\n'}"
   response="${response%$'\n'*}"
@@ -36,7 +38,7 @@ post() {
 }
 
 balance() {
-  curl -sS -f "$BASE_URL/accounts/$1" | field balance
+  curl -sS -f --max-time "$CURL_MAX_TIME" "$BASE_URL/accounts/$1" | field balance
 }
 
 a=$(post /accounts "$RUN_ID-a" '' | field id)
