@@ -87,7 +87,7 @@ class ConcurrentTransfersInvariantTest {
                 throws InterruptedException {
             assertThat(strategy).isInstanceOf(PessimisticStrategy.class);
             verify(service, accounts, jdbc, reconciliation, "pessimistic");
-            assertNoRetries(meters);
+            assertThat(retries(meters)).as("conflict retries").isZero();
         }
     }
 
@@ -102,7 +102,7 @@ class ConcurrentTransfersInvariantTest {
                 throws InterruptedException {
             assertThat(strategy).isInstanceOf(ConditionalUpdateStrategy.class);
             verify(service, accounts, jdbc, reconciliation, "conditional-update");
-            assertNoRetries(meters);
+            assertThat(retries(meters)).as("conflict retries").isZero();
         }
     }
 
@@ -119,7 +119,7 @@ class ConcurrentTransfersInvariantTest {
             verify(service, accounts, jdbc, reconciliation, "optimistic");
             // The workload must really have produced version conflicts, or the run proves nothing
             // about the retry path.
-            assertThat(meters.counter("ledger.transfer.conflict.retries").count()).as("conflict retries").isPositive();
+            assertThat(retries(meters)).as("conflict retries").isPositive();
         }
     }
 
@@ -138,7 +138,7 @@ class ConcurrentTransfersInvariantTest {
             assertThat(jdbcIsolation(jdbc)).isEqualTo("read committed");
             // The workload must really have produced serialization failures, or the run proves
             // nothing about the retry path.
-            assertThat(meters.counter("ledger.transfer.conflict.retries").count()).as("conflict retries").isPositive();
+            assertThat(retries(meters)).as("conflict retries").isPositive();
         }
 
         private static String jdbcIsolation(JdbcClient jdbc) {
@@ -147,11 +147,12 @@ class ConcurrentTransfersInvariantTest {
     }
 
     /**
-     * For the strategies that write in id order and never abort on conflict: a retry would mean a
-     * deadlock that the bounded retry hid, so there must be none.
+     * Conflict retries of this context's strategy (one strategy per context). Zero is required for
+     * the strategies that write in id order and never abort on conflict: a retry would mean a
+     * deadlock that the bounded retry hid.
      */
-    private static void assertNoRetries(MeterRegistry meters) {
-        assertThat(meters.counter("ledger.transfer.conflict.retries").count()).as("conflict retries").isZero();
+    private static double retries(MeterRegistry meters) {
+        return meters.get("ledger.transfer.retries").counter().count();
     }
 
     // Set by verify() from the nested class's context, never from the enclosing class's.
