@@ -156,7 +156,7 @@ class LedgerBenchmark {
      * deposit debits the settlement account (ADR 0008), and in parallel they make it the hottest
      * row of all, which under the optimistic and serializable strategies ends in 503s.
      */
-    private static List<String> seed(AppProcess app) throws Exception {
+    static List<String> seed(AppProcess app) throws Exception {
         List<String> ids = Collections.synchronizedList(new ArrayList<>());
         Semaphore inFlight = new Semaphore(32);
         List<Future<?>> pending = new ArrayList<>();
@@ -312,7 +312,7 @@ class LedgerBenchmark {
      * platform threads (virtual threads are not counted by the JVM's thread gauge), peak used heap
      * and mean process CPU; and the load generator's own CPU, reported next to it (ADR 0011).
      */
-    private static final class ResourceSampler {
+    static final class ResourceSampler {
 
         record Summary(double peakPlatformThreads, double peakHeapMb, double meanAppCpu, double meanLoadGeneratorCpu) {
         }
@@ -361,7 +361,7 @@ class LedgerBenchmark {
     }
 
     /** Invariants 1 to 3 of the phase 1 spec: a benchmark never reports numbers from a broken ledger (ADR 0014). */
-    private static void checkLedger(PostgreSQLContainer db) throws SQLException {
+    static void checkLedger(PostgreSQLContainer db) throws SQLException {
         assertThat(queryLong(db, "select coalesce(sum(balance_cents), 0) from accounts")).as("sum of balances").isZero();
         assertThat(queryLong(db, "select count(*) from accounts where kind = 'CUSTOMER' and balance_cents < 0"))
                 .as("negative customer balances").isZero();
@@ -439,7 +439,7 @@ class LedgerBenchmark {
         Files.writeString(OUT.resolve("run.json"), json(info) + "\n", StandardCharsets.UTF_8);
     }
 
-    private static String cpuModel() {
+    static String cpuModel() {
         Path cpuinfo = Path.of("/proc/cpuinfo");
         try {
             if (Files.exists(cpuinfo)) {
@@ -459,15 +459,15 @@ class LedgerBenchmark {
         return Math.round(value * 100) / 100.0;
     }
 
-    /** Flat JSON object; values are numbers or strings without quotes or backslashes. */
-    private static String json(Map<String, Object> fields) {
+    /** Flat JSON object; values are numbers, booleans or strings without quotes or backslashes. */
+    static String json(Map<String, Object> fields) {
         StringBuilder out = new StringBuilder("{");
         fields.forEach((key, value) -> {
             if (out.length() > 1) {
                 out.append(',');
             }
             out.append('"').append(key).append("\":");
-            out.append(value instanceof Number ? value.toString() : "\"" + value + "\"");
+            out.append(value instanceof Number || value instanceof Boolean ? value.toString() : "\"" + value + "\"");
         });
         return out.append('}').toString();
     }

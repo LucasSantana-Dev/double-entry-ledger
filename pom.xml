@@ -156,6 +156,9 @@
 		<!-- Load benchmarks (phase 2, ADRs 0011 to 0014): ./mvnw -Pbenchmark verify. Kept out of the default build. -->
 		<profile>
 			<id>benchmark</id>
+			<properties>
+				<ledger.bench.include>**/LedgerBenchmark.java</ledger.bench.include>
+			</properties>
 			<dependencies>
 				<!-- JMeter libraries with known CVEs are excluded when an HTTP-only plan run without the
 				     JMeter GUI never loads them: Tika (document view of responses), dnsjava (DNS cache
@@ -256,7 +259,9 @@
 						<artifactId>maven-failsafe-plugin</artifactId>
 						<configuration>
 							<includes>
-								<include>**/*Benchmark.java</include>
+								<!-- The phase 2 grid by default; the breaking-point run (ADR 0030) is selected with
+								     -Dledger.bench.include=**/BreakingPointBenchmark.java. -->
+								<include>${ledger.bench.include}</include>
 							</includes>
 							<!-- Room for 1,024 JMeter threads; the application has its own JVM. -->
 							<argLine>-Xmx2g</argLine>

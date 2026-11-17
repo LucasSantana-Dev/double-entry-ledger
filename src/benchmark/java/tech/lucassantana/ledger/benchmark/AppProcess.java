@@ -161,7 +161,12 @@ final class AppProcess implements AutoCloseable {
         throw new IllegalStateException(path + " has no " + statistic + ": " + response.body());
     }
 
-    private String tail() throws IOException {
+    /** False once the application process has exited, for example after running out of memory. */
+    boolean alive() {
+        return process.isAlive();
+    }
+
+    String tail() throws IOException {
         List<String> lines = Files.readAllLines(log);
         return String.join("\n", lines.subList(Math.max(0, lines.size() - 40), lines.size()));
     }

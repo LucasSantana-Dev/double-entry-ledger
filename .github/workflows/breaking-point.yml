@@ -1,0 +1,93 @@
+name: Breaking point
+
+# Manual only (ADR 0030): open-model arrival-rate steps until the SLO breaks. Separate from CI
+# and from the phase 2 benchmark workflow. The fallbacks after || are the input defaults, for a
+# run started without inputs.
+on:
+  workflow_dispatch:
+    inputs:
+      repetitions:
+        description: Repetitions of every cell, shuffled together
+        type: number
+        default: 5
+      hot_shares:
+        description: Comma-separated hot-account shares (ADR 0031)
+        type: string
+        default: '0,0.9'
+      rates:
+        description: Ladder of arrival rates in req/s, used when no per-cell ladder is given
+        type: string
+        default: '250,500,1000,1500,2000,3000,4000'
+      rates_hot00:
+        description: Optional ladder for the 0% hot cell
+        type: string
+        default: ''
+      rates_hot90:
+        description: Optional ladder for the 90% hot cell
+        type: string
+        default: ''
+      step:
+        description: Duration of each step, ISO-8601
+        type: string
+        default: PT2M
+      stop_after_failures:
+        description: Stop the ladder after this many steps in a row outside the SLO; 0 climbs it all
+        type: number
+        default: 2
+      timeout:
+        description: Client timeout, ISO-8601
+        type: string
+        default: PT5S
+
+permissions:
+  contents: read
+
+jobs:
+  breaking-point:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: maven
+      # Inputs go through the environment, never straight into the script.
+      - name: Climb the ladder
+        env:
+          REPETITIONS: ${{ inputs.repetitions || 5 }}
+          HOT_SHARES: ${{ inputs.hot_shares || '0,0.9' }}
+          RATES: ${{ inputs.rates || '250,500,1000,1500,2000,3000,4000' }}
+          RATES_HOT00: ${{ inputs.rates_hot00 }}
+          RATES_HOT90: ${{ inputs.rates_hot90 }}
+          STEP: ${{ inputs.step || 'PT2M' }}
+          STOP_AFTER_FAILURES: ${{ format('{0}', inputs.stop_after_failures) || '2' }}  # format keeps an input of 0
+          TIMEOUT: ${{ inputs.timeout || 'PT5S' }}
+        run: |
+          args=(
+            "-Dledger.bench.include=**/BreakingPointBenchmark.java"
+            "-Dledger.bench.repetitions=$REPETITIONS"
+            "-Dledger.bench.hot-shares=$HOT_SHARES"
+            "-Dledger.bench.rates=$RATES"
+            "-Dledger.bench.step=$STEP"
+            "-Dledger.bench.stop-after-failures=$STOP_AFTER_FAILURES"
+            "-Dledger.bench.timeout=$TIMEOUT"
+          )
+          if [ -n "$RATES_HOT00" ]; then args+=("-Dledger.bench.rates.hot00=$RATES_HOT00"); fi
+          if [ -n "$RATES_HOT90" ]; then args+=("-Dledger.bench.rates.hot90=$RATES_HOT90"); fi
+          ./mvnw -B -Pbenchmark verify "${args[@]}"
+      - name: Aggregate
+        if: always()
+        run: |
+          if [ -f target/benchmark/steps.jsonl ]; then
+            python3 tools/benchmark/breaking_point.py target/benchmark
+            cat target/benchmark/results.md >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: Keep results and application logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: breaking-point-${{ github.run_id }}
+          path: target/benchmark/
+          if-no-files-found: warn
