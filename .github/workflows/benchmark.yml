@@ -25,6 +25,14 @@ on:
         description: Measured window per cell, ISO-8601 duration
         type: string
         default: PT60S
+      app_cpus:
+        description: Phase 5 (ADR 0029). Cores the application is pinned to, for example 0,1; empty leaves it unpinned
+        type: string
+        default: ''
+      app_jvm_args:
+        description: Phase 5 (ADR 0029). Application JVM options replacing -Xms1g -Xmx1g; empty keeps them
+        type: string
+        default: ''
 
 permissions:
   contents: read
@@ -48,6 +56,8 @@ jobs:
           CELLS: ${{ inputs.cells }}
           WARMUP: ${{ inputs.warmup }}
           MEASURE: ${{ inputs.measure }}
+          APP_CPUS: ${{ inputs.app_cpus }}
+          APP_JVM_ARGS: ${{ inputs.app_jvm_args }}
         run: >
           ./mvnw -B -Pbenchmark verify
           "-Dledger.bench.repetitions=$REPETITIONS"
@@ -55,6 +65,8 @@ jobs:
           "-Dledger.bench.cells=$CELLS"
           "-Dledger.bench.warmup=$WARMUP"
           "-Dledger.bench.measure=$MEASURE"
+          "-Dledger.bench.app.cpus=$APP_CPUS"
+          "-Dledger.bench.app.jvm-args=$APP_JVM_ARGS"
       - name: Aggregate
         if: always()
         run: |

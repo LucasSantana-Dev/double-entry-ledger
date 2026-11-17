@@ -70,6 +70,11 @@ def markdown(summary, run):
         f"Run `{run.get('githubRunId')}` started {run.get('startedAt')} on {run.get('cpu')} "
         f"({run.get('logicalCpus')} logical CPUs), {run.get('os')}, Java {run.get('java')}. "
         f"Warm-up {run.get('warmup')}, measured {run.get('measure')}, {run.get('repetitions')} repetitions in shuffled order.",
+    ]
+    if run.get("appCpus") or run.get("appJvmArgs"):
+        lines[-1] += (f" Application pinned to CPUs `{run.get('appCpus') or 'all'}`, "
+                      f"JVM options `{run.get('appJvmArgs') or '-Xms1g -Xmx1g'}`.")
+    lines += [
         "",
         "Each value is the median over the repetitions, with its 95% bootstrap interval in brackets. "
         "Latency is for created transfers (201); `all p99` includes 503 answers (ADR 0015).",

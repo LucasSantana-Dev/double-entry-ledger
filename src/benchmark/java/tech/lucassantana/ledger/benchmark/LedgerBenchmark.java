@@ -433,6 +433,9 @@ class LedgerBenchmark {
         info.put("warmup", WARMUP.toString());
         info.put("measure", MEASURE.toString());
         info.put("seed", SEED);
+        // Phase 5 options (ADR 0029); empty means the phase 2 setup.
+        info.put("appJvmArgs", AppProcess.JVM_ARGS);
+        info.put("appCpus", AppProcess.CPUS);
         Files.writeString(OUT.resolve("run.json"), json(info) + "\n", StandardCharsets.UTF_8);
     }
 

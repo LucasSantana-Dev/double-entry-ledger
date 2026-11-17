@@ -25,6 +25,11 @@ final class AppProcess implements AutoCloseable {
     private static final Pattern MEASUREMENT =
             Pattern.compile("\"statistic\"\\s*:\\s*\"(\\w+)\"\\s*,\\s*\"value\"\\s*:\\s*([-0-9.Ee+]+)");
 
+    /** JVM options replacing the phase 2 {@code -Xms1g -Xmx1g}, space-separated; empty keeps them. */
+    static final String JVM_ARGS = System.getProperty("ledger.bench.app.jvm-args", "");
+    /** Cores for the application, for example {@code 0,1}; empty leaves it unpinned as in phase 2. */
+    static final String CPUS = System.getProperty("ledger.bench.app.cpus", "");
+
     private final Process process;
     private final Path log;
     private final HttpClient http = HttpClient.newHttpClient();
@@ -41,10 +46,24 @@ final class AppProcess implements AutoCloseable {
             throws IOException, InterruptedException {
         int port = freePort();
         String java = ProcessHandle.current().info().command().orElse("java");
-        List<String> command = new ArrayList<>(List.of(
-                java,
-                // Pinned so every cell runs the same JVM size; the heap metric is read against it.
-                "-Xms1g", "-Xmx1g",
+        List<String> command = new ArrayList<>();
+        boolean pinned = !CPUS.isBlank();
+        // Phase 5 (ADR 0029): a simulated small machine. On Linux the process is pinned to the
+        // given cores, and the JVM sizes its pools for that many CPUs.
+        if (pinned && System.getProperty("os.name").toLowerCase().contains("linux")) {
+            command.addAll(List.of("taskset", "-c", CPUS));
+        }
+        command.add(java);
+        if (pinned) {
+            command.add("-XX:ActiveProcessorCount=" + CPUS.split(",").length);
+        }
+        if (JVM_ARGS.isBlank()) {
+            // Pinned so every cell runs the same JVM size; the heap metric is read against it.
+            command.addAll(List.of("-Xms1g", "-Xmx1g"));
+        } else {
+            command.addAll(List.of(JVM_ARGS.trim().split("\\s+")));
+        }
+        command.addAll(List.of(
                 "-jar", jar.toString(),
                 "--server.port=" + port,
                 "--spring.datasource.url=" + jdbcUrl,
