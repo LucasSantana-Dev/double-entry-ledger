@@ -2,156 +2,18 @@
 
 [![CI](https://github.com/LucasSantana-Dev/double-entry-ledger/actions/workflows/ci.yml/badge.svg)](https://github.com/LucasSantana-Dev/double-entry-ledger/actions/workflows/ci.yml)
 
-A money transfer service that never creates, loses or duplicates money, even with thousands of concurrent requests and clients retrying the same call. A test drives a real PostgreSQL with that workload and then audits the books.
+A money transfer service that never creates, loses or duplicates money, even with thousands of concurrent requests and clients retrying the same call. Every claim below comes from a test or a CI run in this repo, against real PostgreSQL, Kafka and Kubernetes in containers.
 
-The numbers, all from tests and CI runs in this repo:
-
-- 0 invariant violations in 21,975 concurrent submissions, 10% of them sent twice with the same idempotency key.
-- 983 transfers/s at 90% contention on one account with the default strategy, against 228 for the serializable strategy, and no 503 answers.
-- Every transfer reaches the Kafka-fed statement exactly once through a paused broker, a cut database connection, a consumer crash and duplicate deliveries.
-- One trace per transfer, from the HTTP request through the outbox to the consumer.
-
-Each phase adds a property and a test that proves it against real infrastructure in containers:
-
-1. Balances stay consistent under a concurrent, retrying workload: seven invariants checked in the database ([below](#what-the-tests-prove)).
-2. Four concurrency strategies benchmarked under load; the fastest one that never answers 503 is the default ([results](#benchmark-results)).
-3. Every transfer becomes exactly one Kafka event and one set of statement lines, through a broker outage, a cut database connection, a consumer crash and duplicate deliveries ([events](#events)).
-4. One trace follows a transfer from the HTTP request through the outbox to the statement consumer, the outbox and conflicts are metrics on a dashboard, and the service is deployed to Kubernetes in CI ([observability and deployment](#observability-and-deployment)).
-
-A longer account of the four phases: [article draft](docs/writeup/2026-11-16-ledger-consistency-under-concurrency-and-failure.md).
-
-Java 25 · Spring Boot 4.1 · Spring Data JPA · PostgreSQL 18 · Kafka · Flyway · Testcontainers · Toxiproxy · virtual threads · OpenTelemetry · Grafana · Docker · Kubernetes (kind)
-
-## What the tests prove
-
-`ConcurrentTransfersInvariantTest` fires a seeded random workload at the service on virtual threads: transfers in both directions between the same accounts, 30% of them touching one hot account, amounts large enough that some must fail, and 10% of the requests sent twice at the same time with the same idempotency key. Then it checks, straight in the database:
-
-1. The sum of all balances is zero (money in = money out of the settlement account).
-2. No customer balance is negative.
-3. Every balance equals the sum of its entries.
-4. Every transfer is exactly two entries that cancel out.
-5. No idempotency key produced more than one transfer, and every replay returned the original one.
-6. Every transfer has its idempotency key stored.
-7. Entries cannot be updated or deleted (the database rejects it).
-
-It also fails on any unexpected exception, so a single deadlock or lock timeout breaks the build. On top of the database checks, it keeps a client-side model of every transfer reported as created and asserts that the stored transfers and every final balance match it exactly.
-
-Runs on 2026-11-13 (JDK 25, PostgreSQL 18 in Docker, Windows 11 laptop):
-
-| Seed | Submissions | Created | Replayed | Insufficient funds | 409 then retried | Violations |
-|---|---|---|---|---|---|---|
-| 20261113 (default) | 5,533 over 5,000 keys | 3,815 | 398 | 1,320 | 522 | 0 |
-| 7 | 21,975 over 20,000 keys | 14,878 | 1,433 | 5,664 | 1,881 | 0 |
-
-The seed fixes the workload, not the thread interleaving, so the counts move a little between runs of the same seed. The invariants must hold on every run. Timings are not reported here: this test is built to create contention, and phase 2 measures throughput.
-
-## Events
-
-Every committed transfer and deposit also becomes a `TransferCommitted` event on the Kafka topic `ledger.transfers`, and an account statement is built from those events. The event is a row in an `outbox_events` table written in the transfer's own transaction; a polling relay, kept to one active instance by a PostgreSQL advisory lock, sends it to Kafka and marks it published ([ADR 0016](docs/adr/0016-outbox-polling-relay.md)). Delivery is at least once, so the statement consumer records each event id in the same transaction as its statement lines and skips ids it has seen ([ADR 0017](docs/adr/0017-statement-projection-and-reconciliation.md)). A scheduled reconciliation compares the ledger with the statement and reports any difference.
-
-Phase 3 invariants, asserted by tests:
-
-1. Every committed transfer has exactly one outbox event, written in the same transaction; a rolled back transfer has none.
-2. Every event is eventually published, including after the broker was down and after the database connection was cut between the send and the mark-published update.
-3. The statement applies each event exactly once, even with duplicate deliveries and a consumer crash before the offset commit.
-4. After every fault, reconciliation reports zero differences and every statement balance equals the ledger balance.
-5. Per account, the statement follows commit order: lines are ordered by the ledger sequence the event carries, not by arrival. The invariant test checks this against the commit timestamps PostgreSQL records for the concurrent transactions.
-
-`ConcurrentTransfersInvariantTest` checks all five on top of the seven above, for each of the four concurrency strategies: after the workload it waits for the relay to drain and the statement to catch up, then reconciles. `FaultInjectionTest` injects four faults against the real containers ([ADR 0019](docs/adr/0019-fault-injection.md)):
-
-| Fault | How it is injected |
-|---|---|
-| Broker down | Kafka container paused through the Docker API until the producer times out |
-| Database connection cut between send and mark-published | The application reaches PostgreSQL only through Toxiproxy; a hook disables the proxy right after Kafka acknowledged the batch |
-| Consumer crash after its commit, before the offset commit | A hook throws after the statement transaction committed, so the container redelivers |
-| Duplicate delivery | Published rows set back to pending, so the relay sends every event again |
-
-Phase 3 adds about 1 min 47 s to `./mvnw verify` locally (1 min 40 s to 3 min 27 s, 55 to 69 tests).
-
-## Observability and deployment
-
-### One trace per transfer, through the outbox
-
-The relay sends an event on a scheduler thread, long after the request that wrote it has ended, and that is where traces usually break. Here the transfer transaction stores the current span's W3C `traceparent` in the outbox row (Flyway V5), and the relay opens its `outbox relay` span with that stored context as the parent. Kafka observation puts a `traceparent` header on the record, so the consumer span is a child of the send span. A row without a context (written while the request was not sampled, or before V5) gets a new root span and is published anyway ([ADR 0021](docs/adr/0021-tracing-micrometer-otel-and-outbox-traceparent.md)). Tracing uses Spring Boot's OpenTelemetry starter with OTLP export and `datasource-micrometer` for JDBC spans, without a Java agent.
+1. **Consistency under concurrency.** 0 invariant violations in 21,975 concurrent submissions, 10% of them sent twice with the same idempotency key. Seven invariants are checked straight in the database ([details](docs/results.md#what-the-tests-prove)).
+2. **Throughput under contention.** Four concurrency strategies benchmarked. The default, a conditional `UPDATE`, creates 983 transfers/s with 90% of them hitting one account, against 228 for the serializable strategy, and never answers 503 ([benchmark](docs/results.md#benchmark-results)).
+3. **Exactly once through failures.** Every transfer becomes one Kafka event and one set of statement lines, through a paused broker, a cut database connection, a consumer crash and duplicate deliveries ([events](docs/results.md#events)).
+4. **Observability and deployment.** One trace follows a transfer from the HTTP request through the outbox to the consumer, ledger metrics feed a Grafana dashboard, and CI deploys the service to a kind cluster ([observability](docs/results.md#observability-and-deployment)).
 
 ![One transfer in Grafana Tempo: the HTTP server span, its SQL, the outbox relay span, the Kafka send and the statement consumer in one trace](docs/images/phase-4-trace.png)
 
-### Metrics, logs and the dashboard
+Java 25 · Spring Boot 4.1 · Spring Data JPA · PostgreSQL 18 · Kafka · Flyway · Testcontainers · Toxiproxy · virtual threads · OpenTelemetry · Grafana · Docker · Kubernetes (kind)
 
-None of the application's own meters ([ADR 0022](docs/adr/0022-otel-lgtm-stack-metrics-and-logs.md)) is tagged with an account, transfer or key id.
-
-| Meter | Tells |
-|---|---|
-| `ledger.outbox.pending`, `ledger.outbox.oldest.pending.age` | Events committed but not yet in Kafka, and how long the oldest has waited: the broker or the relay is stuck |
-| `ledger.outbox.parked` | Events Kafka rejected for good; each one is a transfer missing from the statement until someone acts |
-| `ledger.transfer.retries`, `ledger.transfer.unavailable` (tags `strategy`, `operation`) | Conflict retries and 503 answers per concurrency strategy, the phase 2 comparison on a running service |
-| `ledger.reconciliation.differences`, `ledger.reconciliation.last.success` | Differences found by the last scheduled reconciliation, and when it last completed, so a stalled schedule shows |
-| `ledger.statement.dead-lettered` | Events the statement could not apply, sent to `ledger.transfers.DLT` |
-| `http.server.requests` with a percentile histogram | Requests and p99 per status, as phase 2 reported latency |
-
-Logs are ECS JSON on the console with trace and span ids. The provisioned dashboard below was captured during a run of the smoke script in a loop plus random transfers (some for more than the balance, hence the 422s), with Kafka paused for 150 s (metrics are exported once a minute, so a shorter pause can fall between two samples): the pending outbox count and the oldest pending age climb while the broker is away and drop to zero when the relay drains.
-
-![The ledger dashboard in Grafana: requests and p99 by status, the outbox backlog during a Kafka pause and its drain, conflicts, consumer lag, reconciliation](docs/images/phase-4-dashboard.png)
-
-### Running it locally
-
-The compose file needs Docker with about 2 GB free for the observability container, on top of the application, PostgreSQL and Kafka.
-
-```bash
-docker compose up -d --build   # API on localhost:8080, Grafana on localhost:3000 (dashboard "Ledger")
-SQL_CMD="docker compose exec -T postgres psql -U ledger -d ledger -tAc" bash deploy/smoke.sh
-docker compose down -v
-```
-
-`grafana/otel-lgtm` (OpenTelemetry Collector, Prometheus, Tempo, Loki and Grafana in one image) is a demo backend intended for development and testing; production monitoring would need a different setup. Grafana opens without a login. Sampling is 1.0 in compose; the application default is 0.1.
-
-### Kubernetes
-
-The repo has a multi-stage `Dockerfile` (JDK 25 build, JRE 25 runtime, non-root) and Kustomize manifests: `deploy/k8s/base` with the application, PostgreSQL 18 and single-node KRaft Kafka StatefulSets, the topic setup, a ConfigMap and a Secret; `deploy/k8s/overlays/kind` for CI. Liveness and readiness come from the Actuator health groups. The [Deploy to kind](.github/workflows/deploy-kind.yml) workflow builds the image, creates a kind cluster, applies the overlay, waits for the rollouts and runs `deploy/smoke.sh`: two accounts, a deposit, a transfer, the balances over HTTP, then the transfer's two statement lines in the database ([ADR 0024](docs/adr/0024-kubernetes-on-kind-in-ci.md)). There is no public deployment. Kafka and PostgreSQL run as single nodes with no redundancy, which is enough for the demo.
-
-### Phase 4 criteria
-
-Each criterion is asserted by a test ([ADR 0023](docs/adr/0023-observability-tests.md)):
-
-| Criterion | Test |
-|---|---|
-| One committed transfer is one trace: HTTP server span, JDBC spans, relay span whose parent is the context stored in the outbox row, Kafka send, consumer span, in that parent order | `TracingTest`, spans captured in process from the real OpenTelemetry SDK |
-| The Kafka record carries a `traceparent` header of that trace | `TracingTest` |
-| A transfer committed while not sampled, or an outbox row without a `traceparent`, is still published and applied | `TracingTest` |
-| While Kafka is paused, pending and oldest pending age rise; after it resumes, pending returns to 0 | `ObservabilityMetricsTest`, Kafka paused through the Docker API |
-| Under optimistic and serializable with a hot account, retries are counted under the right `strategy` tag and `ledger.transfer.unavailable` equals the 503 responses | `ObservabilityMetricsTest` |
-| After a clean scheduled reconciliation, `ledger.reconciliation.differences` is 0 | `ReconciliationTest` |
-| A transfer's trace and a ledger metric reach a real backend over OTLP | `OtlpExportSmokeTest` with `LgtmStackContainer` |
-| The kind deployment rolls out and the smoke test passes | `deploy-kind.yml` |
-| The phase 1 and phase 3 invariants stay green for all four strategies, and the fault injection scenarios too | `ConcurrentTransfersInvariantTest`, `FaultInjectionTest` |
-
-## Design decisions
-
-Each decision has an ADR with the options, the evidence and the consequences.
-
-| Decision | Choice | ADR |
-|---|---|---|
-| Runtime | Java 25 + Spring Boot 4.1 | [0001](docs/adr/0001-java-25-and-spring-boot-4-1.md) |
-| Build | Maven | [0002](docs/adr/0002-maven.md) |
-| Persistence | Spring Data JPA | [0003](docs/adr/0003-spring-data-jpa.md) |
-| Money | `long` cents, Pix decimal string at the API | [0004](docs/adr/0004-money-as-long-cents.md) |
-| Ledger model | Immutable entries + materialized balance | [0005](docs/adr/0005-entries-plus-materialized-balance.md) |
-| Idempotency | PostgreSQL, same transaction, 409 while in flight | [0006](docs/adr/0006-idempotency-key-in-postgres.md) |
-| Concurrency | `SELECT ... FOR UPDATE`, locks taken in id order | [0007](docs/adr/0007-pessimistic-locking-ordered-by-id.md) |
-| Default concurrency strategy | Conditional `UPDATE ... WHERE balance >= x`, chosen from the phase 2 benchmark | [0020](docs/adr/0020-default-strategy-conditional-update.md) |
-| Money entering | Settlement account + deposits | [0008](docs/adr/0008-settlement-account-and-deposits.md) |
-| Property tests | Seeded randomized JUnit tests | [0009](docs/adr/0009-seeded-randomized-tests-instead-of-jqwik.md) |
-| Publishing events | Transactional outbox, polling relay, single relay by advisory lock | [0016](docs/adr/0016-outbox-polling-relay.md) |
-| Consuming events | Statement projection, dedup table in the same transaction, scheduled reconciliation | [0017](docs/adr/0017-statement-projection-and-reconciliation.md) |
-| Event format | JSON envelope with Jackson 3, amounts in cents | [0018](docs/adr/0018-json-event-envelope.md) |
-| Fault injection | Toxiproxy for PostgreSQL, Docker pause for Kafka, test hooks | [0019](docs/adr/0019-fault-injection.md) |
-| Tracing | Boot's OpenTelemetry starter, Kafka observation, JDBC spans, `traceparent` stored in the outbox row | [0021](docs/adr/0021-tracing-micrometer-otel-and-outbox-traceparent.md) |
-| Metrics, logs, local stack | `grafana/otel-lgtm` in compose over OTLP, custom outbox, conflict and reconciliation meters, ECS JSON logs | [0022](docs/adr/0022-otel-lgtm-stack-metrics-and-logs.md) |
-| Observability tests | Spans and meters asserted in process, one OTLP smoke test with `LgtmStackContainer` | [0023](docs/adr/0023-observability-tests.md) |
-| Deployment | Dockerfile, Kustomize with PostgreSQL and KRaft Kafka StatefulSets, kind in GitHub Actions, no public link | [0024](docs/adr/0024-kubernetes-on-kind-in-ci.md) |
-| Write-up | Final README and an article draft in the repo | [0025](docs/adr/0025-results-write-up.md) |
-
-Market evidence behind the stack choices: [126 Brazilian Java job postings](docs/market/2026-11-13-gupy-java-sample.md), reproducible with `tools/market/gupy_java_sample.py`. For phase 3: [100 postings, messaging and resilience keywords](docs/market/2026-11-16-gupy-phase-3-keywords.md), `tools/market/gupy_phase3_keywords.py`. For phase 4: [100 postings, container, cloud, delivery and observability keywords](docs/market/2026-11-16-gupy-phase-4-keywords.md), `tools/market/gupy_phase4_keywords.py` (Docker 50%, Kubernetes 40%, observability or monitoring in any sense 46%, Grafana and tracing 10% each).
+Each design choice has an ADR in [docs/adr](docs/adr) with the options and the evidence; the [decision table](docs/results.md#design-decisions) lists them. A longer account of the four phases: [article draft](docs/writeup/2026-11-16-ledger-consistency-under-concurrency-and-failure.md).
 
 ## API
 
@@ -182,7 +44,7 @@ curl -s localhost:8080/accounts/<id>
 ```bash
 ./mvnw verify                  # build and all tests
 ./mvnw spring-boot:test-run    # API on :8080 with throwaway PostgreSQL and Kafka containers
-docker compose up -d --build   # API on :8080 plus Grafana on :3000, see Observability and deployment
+docker compose up -d --build   # API on :8080 plus Grafana on :3000, see docs/results.md
 ```
 
 Bigger or different invariant runs:
@@ -196,36 +58,6 @@ Load benchmark (Docker; one cell, short windows):
 ```bash
 ./mvnw -Pbenchmark verify -Dledger.bench.cells=strategy-pessimistic-hot30 -Dledger.bench.warmup=PT5S -Dledger.bench.measure=PT10S
 ```
-
-## Benchmark results
-
-One run on a GitHub-hosted runner (4 vCPU AMD EPYC 9V45, Java 25), 24 cells × 5 repetitions in shuffled order, 30 s warm-up and 60 s measured per cell, a fresh PostgreSQL 18 and a fresh application JVM per cell ([ADRs 0012 to 0015](docs/adr/0012-benchmark-scenarios-and-metrics.md)). Values are medians over the 5 repetitions. Full tables with 95% bootstrap intervals: [results.md](docs/benchmarks/2026-11-13/results.md); raw rows: [results.jsonl](docs/benchmarks/2026-11-13/results.jsonl). After every cell the ledger checks passed (entries sum to zero, no negative customer balance, balances match entries).
-
-**Strategies** (256 users, virtual threads; "hot" is the share of transfers that touch one shared account):
-
-| strategy | created/s 0% / 30% / 90% hot | p99 ms (201) 0% / 30% / 90% | 503 per minute at 90% hot |
-|---|---|---|---|
-| conditional-update | 2,042 / 1,602 / 983 | 354 / 359 / 337 | 0 |
-| pessimistic | 1,878 / 1,458 / 768 | 380 / 395 / 416 | 0 |
-| optimistic | 1,813 / 1,043 / 292 | 391 / 676 / 745 | 16,158 |
-| serializable | 1,557 / 808 / 228 | 446 / 830 / 917 | 13,186 |
-
-- The two strategies that wait instead of aborting (conditional-update, pessimistic) degrade gracefully as contention grows and never return 503. Conditional-update is ahead of pessimistic in every cell: one `UPDATE ... WHERE balance >= x` per account instead of a `SELECT ... FOR UPDATE` plus an `UPDATE`.
-- The two that abort (optimistic, serializable) collapse under a hot account: at 90% they create 3 to 4 times fewer transfers than conditional-update, and a large share of requests end in 503 after 5 attempts. Without a hot account optimistic is close to pessimistic, and serializable creates 17 to 24% fewer transfers than the waiting strategies.
-
-**Virtual vs platform threads** (pessimistic strategy):
-
-| users | hot | created/s platform / virtual | p99 ms platform / virtual | platform threads platform / virtual |
-|---|---|---|---|---|
-| 64 | 0% | 1,934 / 1,967 | 90 / 81 | 87 / 22 |
-| 64 | 90% | 874 / 764 | 130 / 127 | 87 / 22 |
-| 1,024 | 0% | 1,776 / 1,906 | 1,011 / 1,550 | 215 / 22 |
-| 1,024 | 90% | 927 / 736 | 1,498 / 1,600 | 215 / 22 |
-
-- Virtual threads do not raise throughput: 10 database connections cap the work in flight, so more request threads only add queueing. That was the hypothesis of ADR 0012 and the data agrees. Most cells are within about 10% with overlapping intervals; at 1,024 users and 90% hot, platform threads are ahead (927 against 736 created/s, intervals apart).
-- Virtual threads keep the platform thread count flat (22 against 215 at 1,024 users). At 1,024 users they cost about 170 MB more heap (about 835 against 665 MB) and a longer p99 tail. A likely reason, not measured here: with virtual threads every request is admitted and its object graph lives while it waits for a connection, while Tomcat's 200-thread pool keeps the excess in the accept queue.
-
-**Limits of these numbers.** One run on a shared cloud runner, with the load generator, the application and PostgreSQL on the same 4 vCPU VM; absolute numbers will differ elsewhere, the comparison between cells is the result. 5 repetitions make the bootstrap intervals coarse. PostgreSQL's CPU and the time spent waiting for a Hikari connection are not measured (ADR 0012); the application used about one core of four and the load generator under a third of a core, so the database and the 10-connection pool are the likely limit. Each cell starts from fresh tables with 1,000 accounts, so table and index bloat over hours is not covered.
 
 ## Roadmap
 
