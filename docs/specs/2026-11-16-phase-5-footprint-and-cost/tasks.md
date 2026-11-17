@@ -5,4 +5,4 @@
 - [x] Memory tuning; limits in `compose.yaml` and `deploy/k8s/base`; 2 GB run with smoke and load
 - [x] AOT cache in the Dockerfile; startup with and without, median of 5; image size
 - [x] Benchmark cells on CI with 2 CPUs and lean memory; results in `docs/benchmarks/<date>/`
-- [x] Cost map in `docs/costs/`; README section and roadmap row; humanizer pass (spec status left to the orchestrator)
+- [x] Cost map in `docs/costs/`; README section and roadmap row; humanizer pass; spec status done
