@@ -4,11 +4,6 @@ name: Breaking point
 # and from the phase 2 benchmark workflow. The fallbacks after || are the input defaults, for a
 # run started without inputs.
 on:
-  # TEMPORARY trigger for the calibration and published runs: a workflow_dispatch workflow only becomes dispatchable once it is
-  # on the default branch. Reverted before review.
-  push:
-    branches: [feat/breaking-point]
-    paths: [.github/workflows/breaking-point.yml]
   workflow_dispatch:
     inputs:
       repetitions:
@@ -62,10 +57,10 @@ jobs:
       - name: Climb the ladder
         env:
           REPETITIONS: ${{ inputs.repetitions || 5 }}
-          HOT_SHARES: ${{ inputs.hot_shares || '0' }}
+          HOT_SHARES: ${{ inputs.hot_shares || '0,0.9' }}
           RATES: ${{ inputs.rates || '250,500,1000,1500,2000,3000,4000' }}
-          RATES_HOT00: ${{ inputs.rates_hot00 || '1500,1750,2000,2250,2500,2750,3000' }}
-          RATES_HOT90: ${{ inputs.rates_hot90 || '500,550,600,650,700,750' }}
+          RATES_HOT00: ${{ inputs.rates_hot00 }}
+          RATES_HOT90: ${{ inputs.rates_hot90 }}
           STEP: ${{ inputs.step || 'PT2M' }}
           STOP_AFTER_FAILURES: ${{ format('{0}', inputs.stop_after_failures) || '2' }}  # format keeps an input of 0
           TIMEOUT: ${{ inputs.timeout || 'PT5S' }}
