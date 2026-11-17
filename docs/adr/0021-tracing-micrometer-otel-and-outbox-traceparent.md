@@ -5,7 +5,7 @@
 
 ## Context
 
-A transfer crosses an HTTP request, a database commit, the outbox relay (ADR 0016, a `@Scheduled` batch every 100 ms on another thread) and the statement consumer (ADR 0017). Phase 4 wants one trace per transfer from the request to the statement line. The relay is where traces usually break: when it sends, the request that wrote the row finished long ago.
+A transfer crosses an HTTP request, a database commit, the outbox relay (ADR 0016, a `@Scheduled` batch every 100 ms on another thread) and the statement consumer (ADR 0017). Phase 4 needs one trace per transfer, from the request to the statement line. Traces usually break at the relay, because by the time it sends, the request that wrote the row has long finished.
 
 ## Options
 
@@ -19,7 +19,7 @@ A transfer crosses an HTTP request, a database commit, the outbox relay (ADR 001
 - Kafka propagation needs `spring.kafka.template.observation-enabled` and `spring.kafka.listener.observation-enabled`, both `false` by default in Boot 4.1.2 ([application properties](https://docs.spring.io/spring-boot/appendix/application-properties/index.html), [Spring Kafka observation](https://docs.spring.io/spring-kafka/reference/kafka/micrometer.html)).
 - JDBC spans are not in Boot. Boot's observability page points to Datasource Micrometer, whose `datasource-micrometer-spring-boot` 2.0.1 is built against Boot 4.0 ([Boot observability](https://docs.spring.io/spring-boot/reference/actuator/observability.html), [Maven Central](https://central.sonatype.com/artifact/net.ttddyy.observation/datasource-micrometer-spring-boot)).
 - The OpenTelemetry messaging conventions let a producer attach a creation context to each message; a parent relationship is allowed for single-message processing, links are required for batches ([messaging spans](https://opentelemetry.io/docs/specs/semconv/messaging/messaging-spans/)). Debezium's outbox router does the same with a `tracingspancontext` column restored as the parent ([Debezium tracing](https://debezium.io/documentation/reference/stable/integrations/tracing.html)).
-- The Java agent (2.33.1) instruments Kafka, Spring Kafka, JDBC and Spring Scheduling, and is tested on Java 25 ([supported libraries](https://github.com/open-telemetry/opentelemetry-java-instrumentation/blob/main/docs/supported-libraries.md)). It still cannot join the relay to the request without the same column, it has to be attached to the Surefire JVM, and next to Boot's Micrometer instrumentation it risks duplicate spans.
+- The Java agent (2.33.1) instruments Kafka, Spring Kafka, JDBC and Spring Scheduling, and is tested on Java 25 ([supported libraries](https://github.com/open-telemetry/opentelemetry-java-instrumentation/blob/main/docs/supported-libraries.md)). It would still need the same column to join the relay to the request. It also has to be attached to the Surefire JVM, and it risks duplicate spans next to Boot's Micrometer instrumentation.
 - Default sampling is 10%, parent based (`management.tracing.sampling.probability`); the restored context must carry the sampled flag.
 - Market (Gupy, 100 Java postings, 2026-11-16, [docs/market/2026-11-16-gupy-phase-4-keywords.md](../market/2026-11-16-gupy-phase-4-keywords.md)): tracing 10%, OpenTelemetry 4%, Micrometer, Jaeger and Zipkin 0%.
 
@@ -35,7 +35,7 @@ Option 1, decided by the repo owner.
 
 ## Consequences
 
-- One trace shows request, SQL, commit, the wait in the outbox, the send and the statement write, so the outbox lag is visible per transfer.
+- One trace shows the request, SQL, commit, the wait in the outbox, the send and the statement write, so the outbox lag of each transfer is visible.
 - The outbox row grows by about 55 bytes. Rows written before V5 have no context.
 - The relay owns a few lines of tracing code (extract the stored context, open the span). The Micrometer propagation API for this has to be checked against the bridge version during implementation.
 - No Java agent in the image or in the tests.

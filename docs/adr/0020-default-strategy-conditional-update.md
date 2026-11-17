@@ -5,7 +5,7 @@
 
 ## Context
 
-Phase 2 (ADR 0010) made the concurrency strategy selectable with `ledger.concurrency.strategy` and measured the four options. The default, used when the property is not set, was still the phase 1 choice: `SELECT ... FOR UPDATE` in id order (ADR 0007). ADR 0007 chose it because it was the easiest to prove correct and left the final pick to the phase 2 numbers. All four strategies pass the invariant test, so correctness no longer separates them.
+Phase 2 (ADR 0010) made the concurrency strategy selectable with `ledger.concurrency.strategy` and measured the four options. The default, used when the property is not set, was still the phase 1 choice: `SELECT ... FOR UPDATE` in id order (ADR 0007). ADR 0007 chose it as the easiest to prove correct and left the final pick to the phase 2 numbers. All four strategies pass the invariant test, so the choice comes down to performance.
 
 ## Options
 
@@ -24,9 +24,9 @@ Phase 2 benchmark, one GitHub Actions run, 256 users on virtual threads, medians
 | optimistic | 1,813 / 1,043 / 292 | 745 | 16,158 |
 | serializable | 1,557 / 808 / 228 | 917 | 13,186 |
 
-- Conditional update leads in every cell: 9%, 10% and 28% more transfers per second than pessimistic at 0%, 30% and 90% hot, and a 19% lower p99 at 90% hot. It saves a round trip per account (no `SELECT ... FOR UPDATE` before the `UPDATE`).
+- Conditional update leads in every cell: 9%, 10% and 28% more transfers per second than pessimistic at 0%, 30% and 90% hot, and a 19% lower p99 at 90% hot. It skips the `SELECT ... FOR UPDATE` before the `UPDATE`, which saves a round trip per account.
 - Like pessimistic, it waits on the row lock instead of aborting, so it never returned 503.
-- Optimistic and `SERIALIZABLE` abort on conflict and collapse under a hot account: 3 to 4 times fewer transfers than conditional update at 90% hot and thousands of 503 per minute. They are out.
+- Optimistic and `SERIALIZABLE` abort on conflict and collapse under a hot account, with 3 to 4 times fewer transfers than conditional update at 90% hot and thousands of 503 per minute, so neither can be the default.
 
 ## Decision
 
@@ -34,7 +34,7 @@ Option 1. `ConditionalUpdateStrategy` carries `matchIfMissing = true`; `Pessimis
 
 ## Consequences
 
-- The business rule "the balance covers the debit" lives in the SQL predicate, not in the `Account` entity. The settlement account rule (ADR 0008) is a predicate on the same statement too.
+- The business rule "the balance covers the debit" lives in the SQL predicate instead of the `Account` entity, and so does the settlement account rule (ADR 0008), on the same statement.
 - When the `UPDATE` matches no row, the strategy reads the account to tell the client why (not found, insufficient funds, settlement not allowed). That read runs only on the failure path.
-- Pessimistic remains available and tested; the invariant test and the error path test still run every strategy.
+- Pessimistic remains available and tested: the invariant test and the error path test still run every strategy.
 - `TransferApiTest` checks that a context without the property gets `ConditionalUpdateStrategy`, so the default cannot change silently. Every test that runs without the property (API, phase 3 outbox, statement and fault injection tests) now exercises conditional update.

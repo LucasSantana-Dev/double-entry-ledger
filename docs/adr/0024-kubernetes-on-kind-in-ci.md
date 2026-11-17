@@ -5,7 +5,7 @@
 
 ## Context
 
-Phase 4 ships the ledger somewhere it can be seen running. Brazilian Java postings ask for containers, Kubernetes and a cloud far more than for any single host, and the project budget is close to zero.
+Phase 4 deploys the ledger somewhere it can be seen running. Brazilian Java postings ask for containers, Kubernetes and a cloud far more often than for any single host, and the project budget is close to zero.
 
 ## Options
 
@@ -45,7 +45,7 @@ Target option 1 and packaging option 1, decided by the repo owner.
 
 ## Consequences
 
-- No monthly cost and no servers to operate. Docker, Kubernetes and GitHub Actions are shown.
-- No public link for now. The same base can take a cloud overlay later; that is a new decision.
+- No monthly cost and no servers to operate. The project shows Docker, Kubernetes and GitHub Actions in use.
+- No public link for now. The same base can take a cloud overlay later, as a new decision.
 - No hyperscaler (AWS, Azure) in the project yet, though together with GCP they appear in 47% of the postings.
 - Single-node Kafka and PostgreSQL in the cluster are for the demo, not for availability.
