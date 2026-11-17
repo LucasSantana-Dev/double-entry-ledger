@@ -1,5 +1,5 @@
 ---
-status: planned
+status: done
 date: 2026-11-16
 phase: 5
 tags: [footprint, memory, startup, aot-cache, cost, benchmark]

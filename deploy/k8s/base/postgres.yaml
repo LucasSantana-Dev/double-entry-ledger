@@ -31,6 +31,9 @@ spec:
         - name: postgres
           # Same major and minor as the Testcontainers image (postgres:18-alpine).
           image: postgres:18.7-alpine
+          # Phase 5 (ADR 0027): the application pool holds 10 connections; shared_buffers below
+          # the 128 MB default.
+          args: ["-c", "shared_buffers=64MB", "-c", "max_connections=30"]
           ports:
             - name: postgres
               containerPort: 5432
@@ -62,9 +65,9 @@ spec:
           resources:
             requests:
               cpu: 100m
-              memory: 256Mi
+              memory: 128Mi
             limits:
-              memory: 512Mi
+              memory: 256Mi
           volumeMounts:
             # PostgreSQL 18 images keep PGDATA in a versioned directory under this mount.
             - name: data

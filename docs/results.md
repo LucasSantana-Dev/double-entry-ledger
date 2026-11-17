@@ -135,6 +135,21 @@ Each criterion is asserted by a test ([ADR 0023](adr/0023-observability-tests.md
 | The kind deployment rolls out and the smoke test passes | `deploy-kind.yml` |
 | The phase 1 and phase 3 invariants stay green for all four strategies, and the fault injection scenarios too | `ConcurrentTransfersInvariantTest`, `FaultInjectionTest` |
 
+## Footprint and cost
+
+There is no public deployment ([ADR 0026](adr/0026-no-public-deployment-cost-map-instead.md)). Phase 5 measured what the stack uses and cut it instead. `python tools/footprint/footprint.py --label <name>` starts the application, PostgreSQL and Kafka from `compose.yaml`, runs the smoke test and 10,000 concurrent transfers, and records peak memory, CPU, startup time and image size per container in `docs/footprint/`.
+
+| | baseline | after phase 5 |
+|---|---|---|
+| peak memory, application / PostgreSQL / Kafka | 859 / 119 / 482 MiB | 465 / 91 / 428 MiB |
+| memory limits | none | 768 / 256 / 576 MiB, 1,600 MiB in total |
+| application startup (median of restarts) | 4.7 s | 2.9 s |
+| application image on disk | 596 MB | 748 MB, 118 MB of it the AOT cache |
+
+The memory came from SerialGC with a heap sized to the container limit, half the Kafka heap and a smaller PostgreSQL buffer pool ([ADR 0027](adr/0027-memory-target-2-gb.md)). The startup came from a JVM AOT cache, created by a training start of the application during the image build ([ADR 0028](adr/0028-jvm-aot-cache-for-startup.md)). With the application pinned to 2 cores and the same lean heap, conditional-update created 1,861, 1,384 and 699 transfers per second at 0%, 30% and 90% hot, 9 to 29% fewer than with 4 cores in phase 2 ([run](benchmarks/2026-11-16/results.md), [ADR 0029](adr/0029-throughput-per-dollar.md)).
+
+On a $12 a month 2 GB machine (Lightsail, or t4g.small without its $3.65 public IPv4), that is 150 to 155 created transfers per second per dollar a month without a hot account, roughly twice what the 4 GB machines give. The [cost map](costs/2026-11-16-cost-map.md) has the machines, prices and sources, and its limits: the 2 vCPU machine is simulated on a shared x86 runner where PostgreSQL had cores of its own, the candidates are burstable, and the prices are list prices.
+
 ## Design decisions
 
 Each decision has an ADR with the options, the evidence and the consequences.
@@ -160,6 +175,10 @@ Each decision has an ADR with the options, the evidence and the consequences.
 | Observability tests | Spans and meters asserted in process, one OTLP smoke test with `LgtmStackContainer` | [0023](adr/0023-observability-tests.md) |
 | Deployment | Dockerfile, Kustomize with PostgreSQL and KRaft Kafka StatefulSets, kind in GitHub Actions, no public link | [0024](adr/0024-kubernetes-on-kind-in-ci.md) |
 | Write-up | Final README and an article draft in the repo | [0025](adr/0025-results-write-up.md) |
+| Public deployment | None; a cost map from the measured footprint instead | [0026](adr/0026-no-public-deployment-cost-map-instead.md) |
+| Memory target | Application, PostgreSQL and Kafka in 2 GB | [0027](adr/0027-memory-target-2-gb.md) |
+| Startup | JVM AOT cache from a training start in the image build | [0028](adr/0028-jvm-aot-cache-for-startup.md) |
+| Throughput per dollar | Conditional-update cells on a simulated 2 vCPU machine | [0029](adr/0029-throughput-per-dollar.md) |
 
 Market evidence behind the stack choices: [126 Brazilian Java job postings](market/2026-11-13-gupy-java-sample.md), reproducible with `tools/market/gupy_java_sample.py`. For phase 3: [100 postings, messaging and resilience keywords](market/2026-11-16-gupy-phase-3-keywords.md), `tools/market/gupy_phase3_keywords.py`. For phase 4: [100 postings, container, cloud, delivery and observability keywords](market/2026-11-16-gupy-phase-4-keywords.md), `tools/market/gupy_phase4_keywords.py` (Docker 50%, Kubernetes 40%, observability or monitoring in any sense 46%, Grafana and tracing 10% each).
 

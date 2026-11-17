@@ -8,12 +8,13 @@ A money transfer service that never creates, loses or duplicates money, even wit
 2. **Throughput under contention.** Four concurrency strategies benchmarked. The default, a conditional `UPDATE`, creates 983 transfers/s with 90% of them hitting one account, against 228 for the serializable strategy, and never answers 503 ([benchmark](docs/results.md#benchmark-results)).
 3. **Exactly once through failures.** Every transfer becomes one Kafka event and one set of statement lines, through a paused broker, a cut database connection, a consumer crash and duplicate deliveries ([events](docs/results.md#events)).
 4. **Observability and deployment.** One trace follows a transfer from the HTTP request through the outbox to the consumer, ledger metrics feed a Grafana dashboard, and CI deploys the service to a kind cluster ([observability](docs/results.md#observability-and-deployment)).
+5. **Footprint and cost.** The whole stack (application, PostgreSQL, Kafka) runs under 1,600 MiB of memory limits, the application starts 40% faster from a JVM AOT cache (2.9 s against 4.7 s), and a cost map prices it on small cloud machines; nothing is deployed publicly ([footprint and cost](docs/results.md#footprint-and-cost)).
 
 ![One transfer in Grafana Tempo: the HTTP server span, its SQL, the outbox relay span, the Kafka send and the statement consumer in one trace](docs/images/phase-4-trace.png)
 
 Java 25 · Spring Boot 4.1 · Spring Data JPA · PostgreSQL 18 · Kafka · Flyway · Testcontainers · Toxiproxy · virtual threads · OpenTelemetry · Grafana · Docker · Kubernetes (kind)
 
-Each design choice has an ADR in [docs/adr](docs/adr) with the options and the evidence; the [decision table](docs/results.md#design-decisions) lists them. A longer account of the four phases: [article draft](docs/writeup/2026-11-16-ledger-consistency-under-concurrency-and-failure.md).
+Each design choice has an ADR in [docs/adr](docs/adr) with the options and the evidence; the [decision table](docs/results.md#design-decisions) lists them. A longer account of phases 1 to 4: [article draft](docs/writeup/2026-11-16-ledger-consistency-under-concurrency-and-failure.md).
 
 ## API
 
@@ -67,3 +68,4 @@ Load benchmark (Docker; one cell, short windows):
 | 2 | Benchmark four locking strategies and virtual vs platform threads under load | done |
 | 3 | Transactional outbox to Kafka, idempotent consumer, reconciliation, fault injection | done |
 | 4 | Traces and metrics, deployment, results write-up | done |
+| 5 | Footprint and startup measured and cut, throughput on 2 vCPU, cost map | done |

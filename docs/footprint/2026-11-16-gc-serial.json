@@ -1,0 +1,144 @@
+{
+  "label": "explore-serial",
+  "startedAt": "2026-11-17T00:30:54+00:00",
+  "args": [
+    "--label",
+    "explore-serial",
+    "--no-build",
+    "--keep",
+    "--out",
+    "../../../../tmp-footprint-explore",
+    "--ledger-env",
+    "JAVA_TOOL_OPTIONS=-XX:+UseSerialGC -XX:MaxRAMPercentage=60 -XX:MaxMetaspaceSize=192m -XX:ReservedCodeCacheSize=64m",
+    "--ledger-env",
+    "MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE=health,metrics"
+  ],
+  "commit": "acdfc4e",
+  "host": {
+    "os": "Docker Desktop",
+    "kernel": "6.18.33.2-microsoft-standard-WSL2",
+    "docker": "29.9.3",
+    "cpus": 16,
+    "memGiB": 15.2
+  },
+  "startup": {
+    "first": {
+      "readinessSeconds": 4.77,
+      "springProcessRunningSeconds": 4.571
+    }
+  },
+  "smokeBefore": {
+    "passed": true,
+    "output": [
+      "smoke test passed"
+    ]
+  },
+  "load": {
+    "accounts": 50,
+    "transfers": 10000,
+    "concurrency": 64,
+    "hotShare": 0.3,
+    "seconds": 21.6,
+    "createdPerSecond": 461.9,
+    "statuses": {
+      "201": 10000
+    }
+  },
+  "smokeAfter": {
+    "passed": true,
+    "output": [
+      "smoke test passed"
+    ]
+  },
+  "drain": {
+    "drained": true,
+    "events": 10054,
+    "applied": 10054
+  },
+  "ledgerChecks": {
+    "sumOfBalancesCents": 0,
+    "negativeCustomerBalances": 0,
+    "balancesDifferentFromEntries": 0
+  },
+  "containers": {
+    "ledger": {
+      "image": "double-entry-ledger:local",
+      "peakMemMiB": 469.5,
+      "meanMemMiB": 347.4,
+      "cgroupPeakMiB": 473.9,
+      "memLimitMiB": 768,
+      "cpuLimit": null,
+      "peakCpuPercent": 583.8,
+      "meanCpuPercent": 126.7,
+      "loadCpuSeconds": 68.2,
+      "samples": 38,
+      "oomKilled": false,
+      "status": "running",
+      "exitCode": 0,
+      "restartCount": 0,
+      "settings": {
+        "JAVA_TOOL_OPTIONS": "-XX:+UseSerialGC -XX:MaxRAMPercentage=60 -XX:MaxMetaspaceSize=192m -XX:ReservedCodeCacheSize=64m"
+      }
+    },
+    "postgres": {
+      "image": "postgres:18.7-alpine",
+      "peakMemMiB": 89.8,
+      "meanMemMiB": 63.6,
+      "cgroupPeakMiB": 203.9,
+      "memLimitMiB": 256,
+      "cpuLimit": null,
+      "peakCpuPercent": 132.6,
+      "meanCpuPercent": 34.0,
+      "loadCpuSeconds": 19.7,
+      "samples": 38,
+      "oomKilled": false,
+      "status": "running",
+      "exitCode": 0,
+      "restartCount": 0,
+      "settings": {
+        "command": "postgres -c shared_buffers=64MB -c max_connections=30"
+      }
+    },
+    "kafka": {
+      "image": "apache/kafka:4.2.2",
+      "peakMemMiB": 432.0,
+      "meanMemMiB": 315.9,
+      "cgroupPeakMiB": 512.0,
+      "memLimitMiB": 512,
+      "cpuLimit": null,
+      "peakCpuPercent": 197.9,
+      "meanCpuPercent": 24.6,
+      "loadCpuSeconds": 7.1,
+      "samples": 38,
+      "oomKilled": false,
+      "status": "running",
+      "exitCode": 0,
+      "restartCount": 0,
+      "settings": {
+        "KAFKA_HEAP_OPTS": "-Xms256m -Xmx256m"
+      }
+    }
+  },
+  "totalPeakMemMiB": 991.3,
+  "totalMemLimitMiB": 1536,
+  "images": {
+    "ledger": {
+      "image": "double-entry-ledger:local",
+      "id": "sha256:b2965b8f83f2",
+      "sizeMB": 595.8,
+      "appDirMB": 82.7,
+      "aotCacheMB": null
+    },
+    "postgres": {
+      "image": "postgres:18.7-alpine",
+      "id": "sha256:b6972e1115a4",
+      "sizeMB": 433.3
+    },
+    "kafka": {
+      "image": "apache/kafka:4.2.2",
+      "id": "sha256:1213eb3943d5",
+      "sizeMB": 674.9
+    }
+  },
+  "passed": true
+}
