@@ -5,7 +5,7 @@
 
 ## Context
 
-The project exists to show, with evidence, how a ledger stays consistent under concurrency and failure. The evidence is spread over four phases, their specs, ADRs and benchmark data.
+The project shows with evidence how a ledger stays consistent under concurrency and failure. That evidence is spread over four phases, their specs, ADRs and benchmark data.
 
 ## Options
 
