@@ -2,7 +2,14 @@
 
 [![CI](https://github.com/LucasSantana-Dev/double-entry-ledger/actions/workflows/ci.yml/badge.svg)](https://github.com/LucasSantana-Dev/double-entry-ledger/actions/workflows/ci.yml)
 
-A money transfer service whose central guarantee is that money is never created, lost or duplicated, even with thousands of concurrent requests and clients retrying. A test that hammers a real PostgreSQL and then audits the books proves it.
+A money transfer service that never creates, loses or duplicates money, even with thousands of concurrent requests and clients retrying the same call. A test drives a real PostgreSQL with that workload and then audits the books.
+
+The numbers, all from tests and CI runs in this repo:
+
+- 0 invariant violations in 21,975 concurrent submissions, 10% of them sent twice with the same idempotency key.
+- 983 transfers/s at 90% contention on one account with the default strategy, against 228 for the serializable strategy, and no 503 answers.
+- Every transfer reaches the Kafka-fed statement exactly once through a paused broker, a cut database connection, a consumer crash and duplicate deliveries.
+- One trace per transfer, from the HTTP request through the outbox to the consumer.
 
 Each phase adds a property and a test that proves it against real infrastructure in containers:
 
@@ -36,7 +43,7 @@ Runs on 2026-11-13 (JDK 25, PostgreSQL 18 in Docker, Windows 11 laptop):
 | 20261113 (default) | 5,533 over 5,000 keys | 3,815 | 398 | 1,320 | 522 | 0 |
 | 7 | 21,975 over 20,000 keys | 14,878 | 1,433 | 5,664 | 1,881 | 0 |
 
-The seed fixes the workload, not the thread interleaving, so the counts move a little between runs of the same seed. The invariants must hold on every run. Timings are not reported here: this test is built for contention, not speed, and throughput is measured properly in phase 2.
+The seed fixes the workload, not the thread interleaving, so the counts move a little between runs of the same seed. The invariants must hold on every run. Timings are not reported here: this test is built to create contention, and phase 2 measures throughput.
 
 ## Events
 
@@ -50,7 +57,7 @@ Phase 3 invariants, asserted by tests:
 4. After every fault, reconciliation reports zero differences and every statement balance equals the ledger balance.
 5. Per account, the statement follows commit order: lines are ordered by the ledger sequence the event carries, not by arrival. The invariant test checks this against the commit timestamps PostgreSQL records for the concurrent transactions.
 
-`ConcurrentTransfersInvariantTest` checks all five on top of the seven above, for each of the four concurrency strategies: after the workload it waits for the relay to drain and the statement to catch up, then reconciles. `FaultInjectionTest` breaks things for real ([ADR 0019](docs/adr/0019-fault-injection.md)):
+`ConcurrentTransfersInvariantTest` checks all five on top of the seven above, for each of the four concurrency strategies: after the workload it waits for the relay to drain and the statement to catch up, then reconciles. `FaultInjectionTest` injects four faults against the real containers ([ADR 0019](docs/adr/0019-fault-injection.md)):
 
 | Fault | How it is injected |
 |---|---|
@@ -100,7 +107,7 @@ docker compose down -v
 
 ### Kubernetes
 
-The repo has a multi-stage `Dockerfile` (JDK 25 build, JRE 25 runtime, non-root) and Kustomize manifests: `deploy/k8s/base` with the application, PostgreSQL 18 and single-node KRaft Kafka StatefulSets, the topic setup, a ConfigMap and a Secret; `deploy/k8s/overlays/kind` for CI. Liveness and readiness come from the Actuator health groups. The [Deploy to kind](.github/workflows/deploy-kind.yml) workflow builds the image, creates a kind cluster, applies the overlay, waits for the rollouts and runs `deploy/smoke.sh`: two accounts, a deposit, a transfer, the balances over HTTP, then the transfer's two statement lines in the database ([ADR 0024](docs/adr/0024-kubernetes-on-kind-in-ci.md)). There is no public deployment; single-node Kafka and PostgreSQL are for the demo, not for availability.
+The repo has a multi-stage `Dockerfile` (JDK 25 build, JRE 25 runtime, non-root) and Kustomize manifests: `deploy/k8s/base` with the application, PostgreSQL 18 and single-node KRaft Kafka StatefulSets, the topic setup, a ConfigMap and a Secret; `deploy/k8s/overlays/kind` for CI. Liveness and readiness come from the Actuator health groups. The [Deploy to kind](.github/workflows/deploy-kind.yml) workflow builds the image, creates a kind cluster, applies the overlay, waits for the rollouts and runs `deploy/smoke.sh`: two accounts, a deposit, a transfer, the balances over HTTP, then the transfer's two statement lines in the database ([ADR 0024](docs/adr/0024-kubernetes-on-kind-in-ci.md)). There is no public deployment. Kafka and PostgreSQL run as single nodes with no redundancy, which is enough for the demo.
 
 ### Phase 4 criteria
 
