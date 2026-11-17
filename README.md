@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/LucasSantana-Dev/double-entry-ledger/actions/workflows/ci.yml/badge.svg)](https://github.com/LucasSantana-Dev/double-entry-ledger/actions/workflows/ci.yml)
 
-A money transfer service whose central guarantee is that money is never created, lost or duplicated, even with thousands of concurrent requests and clients retrying. The guarantee is proven by a test that hammers a real PostgreSQL and then audits the books, not by a claim in this README.
+A money transfer service whose central guarantee is that money is never created, lost or duplicated, even with thousands of concurrent requests and clients retrying. A test that hammers a real PostgreSQL and then audits the books proves it.
 
 Each phase adds a property and a test that proves it against real infrastructure in containers:
 
@@ -63,11 +63,15 @@ Phase 3 adds about 1 min 47 s to `./mvnw verify` locally (1 min 40 s to 3 min 27
 
 ## Observability and deployment
 
-**One trace per transfer, through the outbox.** The relay sends an event long after the request that wrote it has ended, on a scheduler thread, which is where traces usually break. Here the transfer transaction stores the current span's W3C `traceparent` in the outbox row (Flyway V5), and the relay opens its `outbox relay` span with that stored context as the parent. Kafka observation puts a `traceparent` header on the record, so the consumer span is a child of the send span. A row without a context (written while the request was not sampled, or before V5) gets a new root span and is published anyway ([ADR 0021](docs/adr/0021-tracing-micrometer-otel-and-outbox-traceparent.md)). Tracing uses Spring Boot's OpenTelemetry starter with OTLP export and `datasource-micrometer` for JDBC spans; no Java agent.
+### One trace per transfer, through the outbox
+
+The relay sends an event on a scheduler thread, long after the request that wrote it has ended, and that is where traces usually break. Here the transfer transaction stores the current span's W3C `traceparent` in the outbox row (Flyway V5), and the relay opens its `outbox relay` span with that stored context as the parent. Kafka observation puts a `traceparent` header on the record, so the consumer span is a child of the send span. A row without a context (written while the request was not sampled, or before V5) gets a new root span and is published anyway ([ADR 0021](docs/adr/0021-tracing-micrometer-otel-and-outbox-traceparent.md)). Tracing uses Spring Boot's OpenTelemetry starter with OTLP export and `datasource-micrometer` for JDBC spans, without a Java agent.
 
 ![One transfer in Grafana Tempo: the HTTP server span, its SQL, the outbox relay span, the Kafka send and the statement consumer in one trace](docs/images/phase-4-trace.png)
 
-**Meters and what they tell** ([ADR 0022](docs/adr/0022-otel-lgtm-stack-metrics-and-logs.md)). None is tagged with an account, transfer or key id.
+### Metrics, logs and the dashboard
+
+None of the application's own meters ([ADR 0022](docs/adr/0022-otel-lgtm-stack-metrics-and-logs.md)) is tagged with an account, transfer or key id.
 
 | Meter | Tells |
 |---|---|
@@ -82,7 +86,9 @@ Logs are ECS JSON on the console with trace and span ids. The provisioned dashbo
 
 ![The ledger dashboard in Grafana: requests and p99 by status, the outbox backlog during a Kafka pause and its drain, conflicts, consumer lag, reconciliation](docs/images/phase-4-dashboard.png)
 
-**Running it locally.** Needs Docker with about 2 GB free for the observability container on top of the application, PostgreSQL and Kafka.
+### Running it locally
+
+The compose file needs Docker with about 2 GB free for the observability container, on top of the application, PostgreSQL and Kafka.
 
 ```bash
 docker compose up -d --build   # API on localhost:8080, Grafana on localhost:3000 (dashboard "Ledger")
@@ -90,11 +96,15 @@ SQL_CMD="docker compose exec -T postgres psql -U ledger -d ledger -tAc" bash dep
 docker compose down -v
 ```
 
-`grafana/otel-lgtm` (OpenTelemetry Collector, Prometheus, Tempo, Loki and Grafana in one image) is a demo backend, intended for development and testing; it is not how this would be monitored in production. Grafana opens without a login. Sampling is 1.0 in compose; the application default is 0.1.
+`grafana/otel-lgtm` (OpenTelemetry Collector, Prometheus, Tempo, Loki and Grafana in one image) is a demo backend intended for development and testing; production monitoring would need a different setup. Grafana opens without a login. Sampling is 1.0 in compose; the application default is 0.1.
 
-**Kubernetes.** A multi-stage `Dockerfile` (JDK 25 build, JRE 25 runtime, non-root) and Kustomize manifests: `deploy/k8s/base` with the application, PostgreSQL 18 and single-node KRaft Kafka StatefulSets, the topic setup, a ConfigMap and a Secret; `deploy/k8s/overlays/kind` for CI. Liveness and readiness come from the Actuator health groups. The [Deploy to kind](.github/workflows/deploy-kind.yml) workflow builds the image, creates a kind cluster, applies the overlay, waits for the rollouts and runs `deploy/smoke.sh`: two accounts, a deposit, a transfer, the balances over HTTP, then the transfer's two statement lines in the database ([ADR 0024](docs/adr/0024-kubernetes-on-kind-in-ci.md)). There is no public deployment; single-node Kafka and PostgreSQL are for the demo, not for availability.
+### Kubernetes
 
-Phase 4 criteria, asserted by tests ([ADR 0023](docs/adr/0023-observability-tests.md)):
+The repo has a multi-stage `Dockerfile` (JDK 25 build, JRE 25 runtime, non-root) and Kustomize manifests: `deploy/k8s/base` with the application, PostgreSQL 18 and single-node KRaft Kafka StatefulSets, the topic setup, a ConfigMap and a Secret; `deploy/k8s/overlays/kind` for CI. Liveness and readiness come from the Actuator health groups. The [Deploy to kind](.github/workflows/deploy-kind.yml) workflow builds the image, creates a kind cluster, applies the overlay, waits for the rollouts and runs `deploy/smoke.sh`: two accounts, a deposit, a transfer, the balances over HTTP, then the transfer's two statement lines in the database ([ADR 0024](docs/adr/0024-kubernetes-on-kind-in-ci.md)). There is no public deployment; single-node Kafka and PostgreSQL are for the demo, not for availability.
+
+### Phase 4 criteria
+
+Each criterion is asserted by a test ([ADR 0023](docs/adr/0023-observability-tests.md)):
 
 | Criterion | Test |
 |---|---|
