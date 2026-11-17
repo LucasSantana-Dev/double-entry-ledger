@@ -27,13 +27,14 @@ Out of scope: other strategies, deposits and reads in the mix, the 30% hot share
 - **Step**: a fixed arrival rate held for 2 minutes. Requests are scheduled at `start + i / rate`.
 - **Latency** of a request: answer time minus scheduled send time. Timeouts and connection errors count as infinitely slow.
 - **Error**: a 5xx answer, a client timeout, a connection error, or a request the generator could not send.
-- **Step passes the SLO** when p99 latency over every scheduled request is at most 500 ms and errors are at most 1% of scheduled requests.
+- **Step passes the SLO** when p99 latency over every scheduled request is at most 500 ms, errors are at most 1% of scheduled requests, the application survived the step, and the server drained its backlog within 2 minutes after it.
+- **4xx answers** are not expected (every request is valid and every account funded); any 4xx fails the run as a harness bug.
 - **Capacity** of a repetition: the rate of the last step that passed before the first step that failed. The published capacity of a cell is the median over repetitions.
 - **Hard failure**: the application process exits (for example out of memory) or stops accepting connections. Recorded with the step where it happened.
 
 ## Acceptance criteria
 
-1. The generator's latency is measured from the scheduled time, verified by a unit-level check that a delayed answer adds its delay to every request queued behind it (no coordinated omission).
+1. The generator's latency is measured from the scheduled time, verified by a check against a stub server: when the generator itself stalls for one second, every request scheduled during the stall reports the delay as latency (no coordinated omission).
 2. Every step line carries offered rate, scheduled, completed, created per second, status counts, timeouts, connection errors, unsent requests, p50, p90, p99, p99.9 and max latency, created-only p99, SLO verdict, ledger check result, application alive, peak heap, mean CPU of the application and of the generator, and drain time.
 3. The ledger invariants (sum of balances zero, no negative customer balance, balances equal their entries) are checked after every step; a violation fails the run.
 4. The calibration run and the published run go through GitHub Actions on the 4 vCPU runner, with the run ids recorded.

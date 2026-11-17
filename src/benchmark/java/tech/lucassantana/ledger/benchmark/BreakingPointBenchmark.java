@@ -12,6 +12,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
+import java.sql.SQLException;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -140,7 +141,7 @@ class BreakingPointBenchmark {
             System.out.printf("[%d/%d] %s rep %d%n", ++done, runs.size(), run.cellId(), run.repetition());
             brokenLedgers.addAll(climb(run));
         }
-        assertThat(brokenLedgers).as("steps after which a ledger invariant failed").isEmpty();
+        assertThat(brokenLedgers).as("steps with a failed ledger check or a 4xx answer").isEmpty();
     }
 
     /** One cell and repetition: warm-up, then the ladder. Returns the steps whose ledger check failed. */
@@ -159,6 +160,7 @@ class BreakingPointBenchmark {
                 Supplier<HttpRequest.Builder> transfers = transfers(app, accounts, run.hotShare());
 
                 OpenLoad.run(client, transfers, WARMUP_RATE, WARMUP, TIMEOUT, MAX_IN_FLIGHT); // discarded
+                requireDrainMetrics(app);
                 drain(app);
 
                 List<Double> rates = doubles(System.getProperty(
@@ -169,10 +171,10 @@ class BreakingPointBenchmark {
                     LedgerBenchmark.ResourceSampler sampler = LedgerBenchmark.ResourceSampler.start(app);
                     OpenLoad.Step step = OpenLoad.run(client, transfers, rate, STEP, TIMEOUT, MAX_IN_FLIGHT);
                     LedgerBenchmark.ResourceSampler.Summary resources = sampler.stop();
-                    double drainSeconds = drain(app);
+                    Drain drain = drain(app);
                     boolean alive = app.alive();
                     boolean ledgerOk = ledgerHolds(db);
-                    Map<String, Object> row = row(run, index, rate, step, resources, drainSeconds, alive, ledgerOk);
+                    Map<String, Object> row = row(run, index, rate, step, resources, drain, alive, ledgerOk);
                     if (!alive) {
                         row.put("exit", app.tail().contains("OutOfMemoryError") ? "out-of-memory" : "exited");
                     }
@@ -182,7 +184,13 @@ class BreakingPointBenchmark {
                             row.get("createdPerSecond"), row.get("p99Ms"), row.get("errorShare"), row.get("sloPass"),
                             ledgerOk ? "ok" : "BROKEN");
                     if (!ledgerOk) {
-                        broken.add(run.cellId() + " rep " + run.repetition() + " at " + rate + " req/s");
+                        broken.add(run.cellId() + " rep " + run.repetition() + " at " + rate + " req/s: ledger check");
+                    }
+                    if ((long) row.get("client4xx") > 0) {
+                        // Every request is valid and every account funded, so a 4xx is a harness bug
+                        // that would pass a fast wrong answer off as a fast answer.
+                        broken.add(run.cellId() + " rep " + run.repetition() + " at " + rate + " req/s: "
+                                + row.get("client4xx") + " client errors");
                     }
                     failuresInARow = (boolean) row.get("sloPass") ? 0 : failuresInARow + 1;
                     if (!alive || (STOP_AFTER_FAILURES > 0 && failuresInARow >= STOP_AFTER_FAILURES)) {
@@ -229,15 +237,17 @@ class BreakingPointBenchmark {
      * so work abandoned by timed-out clients does not spill into the next step. Returns the
      * seconds it took; gives up after 2 minutes or when the application is gone.
      */
-    private static double drain(AppProcess app) throws InterruptedException {
+    private static Drain drain(AppProcess app) throws InterruptedException {
         Instant start = Instant.now();
         Instant deadline = start.plus(Duration.ofMinutes(2));
+        boolean drained = false;
         while (app.alive() && Instant.now().isBefore(deadline)) {
             try {
                 // The metrics request itself is one active request. Active connections are not a
                 // signal: the outbox relay holds one while it waits for the absent Kafka broker.
                 if (app.metric("http.server.requests.active", "ACTIVE_TASKS") <= 1
                         && app.metric("hikaricp.connections.pending", "VALUE") == 0) {
+                    drained = true;
                     break;
                 }
             } catch (IOException | RuntimeException e) {
@@ -245,21 +255,34 @@ class BreakingPointBenchmark {
             }
             Thread.sleep(250);
         }
-        return Duration.between(start, Instant.now()).toMillis() / 1000.0;
+        return new Drain(drained, Duration.between(start, Instant.now()).toMillis() / 1000.0);
     }
 
-    private static boolean ledgerHolds(PostgreSQLContainer db) throws Exception {
+    private record Drain(boolean drained, double seconds) {
+    }
+
+    /**
+     * {@link AppProcess#metric} reads a missing metric as 0, which would make {@link #drain}
+     * return at once; fail the run instead if a drain metric is not there.
+     */
+    private static void requireDrainMetrics(AppProcess app) throws IOException, InterruptedException {
+        for (String name : List.of("http.server.requests.active", "hikaricp.connections.pending")) {
+            assertThat(app.get("/actuator/metrics/" + name).statusCode()).as("metric " + name).isEqualTo(200);
+        }
+    }
+
+    private static boolean ledgerHolds(PostgreSQLContainer db) {
         try {
             LedgerBenchmark.checkLedger(db);
             return true;
-        } catch (AssertionError e) {
+        } catch (AssertionError | SQLException e) {
             System.out.println("  ledger check failed: " + e.getMessage());
             return false;
         }
     }
 
     private static Map<String, Object> row(Run run, int index, double rate, OpenLoad.Step step,
-            LedgerBenchmark.ResourceSampler.Summary resources, double drainSeconds, boolean alive, boolean ledgerOk) {
+            LedgerBenchmark.ResourceSampler.Summary resources, Drain drain, boolean alive, boolean ledgerOk) {
         long cap = TIMEOUT.toNanos();
         int scheduled = step.scheduled();
         long created = step.count(s -> s == 201);
@@ -290,8 +313,10 @@ class BreakingPointBenchmark {
         r.put("seconds", round(step.seconds()));
         r.put("scheduled", scheduled);
         r.put("created", created);
-        r.put("createdPerSecond", round(created / step.seconds()));
-        r.put("answeredPerSecond", round(step.count(s -> s > 0) / step.seconds()));
+        // Per nominal step length: the wall time also holds the wait for the last timeouts.
+        double nominal = STEP.toMillis() / 1000.0;
+        r.put("createdPerSecond", round(created / nominal));
+        r.put("answeredPerSecond", round(step.count(s -> s > 0) / nominal));
         r.put("client4xx", step.count(s -> s >= 400 && s < 500));
         r.put("unavailable503", unavailable503);
         r.put("otherServerErrors", otherServerErrors);
@@ -307,14 +332,17 @@ class BreakingPointBenchmark {
         r.put("maxMs", OpenLoad.percentileMs(step.latencyNanos(), 100, cap));
         r.put("createdP99Ms", OpenLoad.percentileMs(createdLatency, 99, cap));
         r.put("sendLagP99Ms", OpenLoad.percentileMs(step.sendLagNanos(), 99, cap));
-        r.put("sloPass", p99 <= SLO_P99_MS && errorShare <= SLO_ERROR_SHARE);
+        // A step the server could not drain within 2 minutes, or did not survive, is not within
+        // the SLO whatever its percentiles say.
+        r.put("sloPass", p99 <= SLO_P99_MS && errorShare <= SLO_ERROR_SHARE && drain.drained() && alive);
         r.put("ledgerOk", ledgerOk);
         r.put("appAlive", alive);
         r.put("peakPlatformThreads", Math.round(resources.peakPlatformThreads()));
         r.put("peakHeapMb", Math.round(resources.peakHeapMb()));
         r.put("meanAppCpu", round(resources.meanAppCpu()));
         r.put("meanLoadGeneratorCpu", round(resources.meanLoadGeneratorCpu()));
-        r.put("drainSeconds", round(drainSeconds));
+        r.put("drained", drain.drained());
+        r.put("drainSeconds", round(drain.seconds()));
         r.put("finishedAt", Instant.now().toString());
         return r;
     }
@@ -330,8 +358,10 @@ class BreakingPointBenchmark {
         info.put("strategy", STRATEGY);
         info.put("hotShares", HOT_SHARES.toString().replace(" ", ""));
         info.put("rates", RATES);
-        info.put("ratesHot00", System.getProperty("ledger.bench.rates.hot00", ""));
-        info.put("ratesHot90", System.getProperty("ledger.bench.rates.hot90", ""));
+        for (double hot : HOT_SHARES) { // the ladder each cell actually climbs
+            String key = "hot%02d".formatted(Math.round(hot * 100));
+            info.put("rates." + key, System.getProperty("ledger.bench.rates." + key, RATES).replace(" ", ""));
+        }
         info.put("step", STEP.toString());
         info.put("warmup", WARMUP.toString());
         info.put("warmupRate", WARMUP_RATE);

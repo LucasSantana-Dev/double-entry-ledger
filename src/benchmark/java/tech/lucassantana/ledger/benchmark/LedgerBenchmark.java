@@ -342,7 +342,10 @@ class LedgerBenchmark {
                     threads.accept(app.metric("jvm.threads.live", "VALUE"));
                     heap.accept(app.metric("jvm.memory.used", "VALUE", "area:heap") / (1024 * 1024));
                     cpu.accept(app.metric("process.cpu.usage", "VALUE"));
-                    generatorCpu.accept(os.getProcessCpuLoad());
+                    double load = os.getProcessCpuLoad();
+                    if (load >= 0) { // negative until the JVM has a first reading
+                        generatorCpu.accept(load);
+                    }
                     Thread.sleep(1_000);
                 } catch (InterruptedException e) {
                     return;
@@ -356,7 +359,12 @@ class LedgerBenchmark {
             running = false;
             thread.interrupt();
             thread.join();
-            return new Summary(threads.getMax(), heap.getMax(), cpu.getAverage(), generatorCpu.getAverage());
+            // No sample at all (the application died at once) reads as 0, not as -Infinity.
+            return new Summary(max(threads), max(heap), cpu.getAverage(), generatorCpu.getAverage());
+        }
+
+        private static double max(DoubleSummaryStatistics stats) {
+            return stats.getCount() == 0 ? 0 : stats.getMax();
         }
     }
 
