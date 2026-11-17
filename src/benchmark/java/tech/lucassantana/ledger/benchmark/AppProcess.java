@@ -11,7 +11,9 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -35,15 +37,30 @@ final class AppProcess implements AutoCloseable {
     private final HttpClient http = HttpClient.newHttpClient();
     final String baseUrl;
 
+    /** Switches the admission filter off; the application turns it on by default (ADR 0033). */
+    static final String ADMISSION_OFF = "--ledger.admission.max-concurrent=0";
+
     private AppProcess(Process process, Path log, int port) {
         this.process = process;
         this.log = log;
         this.baseUrl = "http://localhost:" + port;
     }
 
-    /** Starts the jar with the cell's settings and waits until it reports healthy. */
+    /**
+     * Starts the jar with the cell's settings and waits until it reports healthy. Admission control
+     * (ADR 0033) stays off, so the phase 2 to 5 numbers remain comparable with the published ones.
+     */
     static AppProcess start(Path jar, Cell cell, String jdbcUrl, String user, String password, Path log)
             throws IOException, InterruptedException {
+        return start(jar, cell, jdbcUrl, user, password, log, List.of(), List.of(ADMISSION_OFF));
+    }
+
+    /**
+     * As {@link #start(Path, Cell, String, String, String, Path)}, with extra JVM options (before
+     * {@code -jar}) and extra application arguments (after the phase 2 ones, so they win).
+     */
+    static AppProcess start(Path jar, Cell cell, String jdbcUrl, String user, String password, Path log,
+            List<String> jvmExtra, List<String> appExtra) throws IOException, InterruptedException {
         int port = freePort();
         String java = ProcessHandle.current().info().command().orElse("java");
         List<String> command = new ArrayList<>();
@@ -63,6 +80,7 @@ final class AppProcess implements AutoCloseable {
         } else {
             command.addAll(List.of(JVM_ARGS.trim().split("\\s+")));
         }
+        command.addAll(jvmExtra);
         command.addAll(List.of(
                 "-jar", jar.toString(),
                 "--server.port=" + port,
@@ -86,6 +104,7 @@ final class AppProcess implements AutoCloseable {
                 "--management.otlp.metrics.export.enabled=false",
                 "--jdbc.datasource-proxy.enabled=false",
                 "--logging.structured.format.console="));
+        command.addAll(appExtra);
         Files.createDirectories(log.getParent());
         Process process = new ProcessBuilder(command)
                 .redirectErrorStream(true)
@@ -159,6 +178,20 @@ final class AppProcess implements AutoCloseable {
             }
         }
         throw new IllegalStateException(path + " has no " + statistic + ": " + response.body());
+    }
+
+    /** Every statistic of an Actuator metric, or an empty map when the metric has no data yet. */
+    Map<String, Double> measurements(String name, Duration timeout) throws IOException, InterruptedException {
+        HttpResponse<String> response = http.send(HttpRequest.newBuilder(URI.create(baseUrl + "/actuator/metrics/" + name))
+                .timeout(timeout).GET().build(), HttpResponse.BodyHandlers.ofString());
+        Map<String, Double> values = new HashMap<>();
+        if (response.statusCode() == 200) {
+            Matcher m = MEASUREMENT.matcher(response.body());
+            while (m.find()) {
+                values.put(m.group(1), Double.parseDouble(m.group(2)));
+            }
+        }
+        return values;
     }
 
     /** False once the application process has exited, for example after running out of memory. */

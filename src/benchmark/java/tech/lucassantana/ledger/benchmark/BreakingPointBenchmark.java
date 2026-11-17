@@ -73,11 +73,40 @@ class BreakingPointBenchmark {
     private static final long SEED = Long.getLong("ledger.bench.seed", 20261116L);
     private static final Path JAR = Path.of(System.getProperty("ledger.bench.jar", "target/double-entry-ledger-0.0.1-SNAPSHOT.jar"));
     private static final Path OUT = Path.of(System.getProperty("ledger.bench.out", "target/benchmark"));
+    /** Repetition numbers start after this, so parallel jobs of one run write distinct ones. */
+    private static final int REPETITION_OFFSET = Integer.getInteger("ledger.bench.repetition-offset", 0);
+    /**
+     * Phase 7 cells, {@code name:hotShare:rate,rate,...[:stepDuration]} separated by {@code ;},
+     * each run once per arm (spec {@code docs/specs/2026-11-17-admission-control}). Empty: the phase 6 ladder per
+     * hot share.
+     */
+    private static final String CELLS = System.getProperty("ledger.bench.cells", "");
+    private static final List<String> ARMS =
+            Arrays.stream(System.getProperty("ledger.bench.arms", "baseline").split(",")).map(String::trim).toList();
+    /** Application arguments per arm, overridable with {@code ledger.bench.arm.<name>}. */
+    private static final Map<String, String> ARM_ARGS = Map.of(
+            "baseline", AppProcess.ADMISSION_OFF,
+            "hikari", AppProcess.ADMISSION_OFF + " --spring.datasource.hikari.connection-timeout=1000",
+            "limiter", "--ledger.admission.max-concurrent=16 --ledger.admission.max-wait=PT0.1S");
 
-    private record Run(double hotShare, int repetition) {
+    /**
+     * One cell and repetition. {@code name} is null for a phase 6 ladder, whose id stays as it
+     * was so the phase 6 aggregator still reads it.
+     */
+    private record Run(String name, double hotShare, String arm, List<Double> rates, Duration step, int repetition) {
 
         String cellId() {
-            return "%s-hot%02d".formatted(STRATEGY, Math.round(hotShare * 100));
+            String base = "%s-hot%02d".formatted(STRATEGY, Math.round(hotShare * 100));
+            return name == null ? base : "%s-hot%02d-%s".formatted(name, Math.round(hotShare * 100), arm);
+        }
+
+        List<String> appArgs() {
+            String override = System.getProperty("ledger.bench.arm." + arm);
+            if (override == null && !ARM_ARGS.containsKey(arm)) {
+                throw new IllegalArgumentException("unknown arm " + arm);
+            }
+            String args = override != null ? override : ARM_ARGS.get(arm);
+            return args.isBlank() ? List.of() : List.of(args.trim().split("\\s+"));
         }
     }
 
@@ -126,12 +155,25 @@ class BreakingPointBenchmark {
     void climbLadder() throws Exception {
         assertThat(JAR).as("packaged application").exists();
         List<Run> runs = new ArrayList<>();
-        for (int repetition = 1; repetition <= REPETITIONS; repetition++) {
-            for (double hot : HOT_SHARES) {
-                runs.add(new Run(hot, repetition));
+        for (int repetition = REPETITION_OFFSET + 1; repetition <= REPETITION_OFFSET + REPETITIONS; repetition++) {
+            if (CELLS.isBlank()) {
+                for (double hot : HOT_SHARES) {
+                    List<Double> rates = doubles(System.getProperty(
+                            "ledger.bench.rates.hot%02d".formatted(Math.round(hot * 100)), RATES));
+                    runs.add(new Run(null, hot, "baseline", rates, STEP, repetition));
+                }
+            } else {
+                for (String spec : CELLS.split(";")) {
+                    String[] parts = spec.trim().split(":");
+                    for (String arm : ARMS) {
+                        Duration step = parts.length > 3 ? Duration.parse(parts[3]) : STEP;
+                        runs.add(new Run(parts[0], Double.parseDouble(parts[1]), arm, doubles(parts[2]), step,
+                                repetition));
+                    }
+                }
             }
         }
-        Collections.shuffle(runs, new Random(SEED));
+        Collections.shuffle(runs, new Random(SEED + REPETITION_OFFSET));
         Files.createDirectories(OUT);
         writeRunInfo(runs.size());
 
@@ -139,19 +181,47 @@ class BreakingPointBenchmark {
         int done = 0;
         for (Run run : runs) {
             System.out.printf("[%d/%d] %s rep %d%n", ++done, runs.size(), run.cellId(), run.repetition());
-            brokenLedgers.addAll(climb(run));
+            if (CELLS.isBlank()) {
+                brokenLedgers.addAll(climb(run));
+                continue;
+            }
+            // Phase 7: one job is one block of the paired design; a run that cannot start must not
+            // take the job's other cells down with it.
+            try {
+                brokenLedgers.addAll(climb(run));
+            } catch (Exception | AssertionError e) {
+                Map<String, Object> failure = new LinkedHashMap<>();
+                failure.put("cell", run.cellId());
+                failure.put("arm", run.arm());
+                failure.put("repetition", run.repetition());
+                failure.put("error", e.getClass().getSimpleName());
+                Files.writeString(OUT.resolve("failures.jsonl"), LedgerBenchmark.json(failure) + "\n",
+                        StandardCharsets.UTF_8, StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+                brokenLedgers.add(run.cellId() + " rep " + run.repetition() + ": did not run, " + e);
+            }
         }
-        assertThat(brokenLedgers).as("steps with a failed ledger check or a 4xx answer").isEmpty();
+        assertThat(brokenLedgers).as("steps with a failed ledger check or a 4xx answer, or runs that failed")
+                .isEmpty();
     }
 
     /** One cell and repetition: warm-up, then the ladder. Returns the steps whose ledger check failed. */
     private List<String> climb(Run run) throws Exception {
         List<String> broken = new ArrayList<>();
         Cell cell = new Cell("breaking-point", STRATEGY, run.hotShare(), 0, true);
-        try (PostgreSQLContainer db = new PostgreSQLContainer(DockerImageName.parse("postgres:18-alpine"))) {
+        // Testcontainers' default command, plus the PostgreSQL events that could stall a step
+        // (spec 2026-11-17-admission-control, scope 1).
+        try (PostgreSQLContainer db = new PostgreSQLContainer(DockerImageName.parse("postgres:18-alpine"))
+                .withCommand("postgres", "-c", "fsync=off", "-c", "log_checkpoints=on",
+                        "-c", "log_autovacuum_min_duration=0", "-c", "log_lock_waits=on")) {
             db.start();
-            Path log = OUT.resolve("logs").resolve(run.cellId() + "-rep" + run.repetition() + ".log");
-            try (AppProcess app = AppProcess.start(JAR, cell, db.getJdbcUrl(), db.getUsername(), db.getPassword(), log);
+            Path logs = OUT.resolve("logs");
+            String prefix = run.cellId() + "-rep" + run.repetition();
+            Path log = logs.resolve(prefix + ".log");
+            Files.createDirectories(logs);
+            List<String> gcLog = List.of("-Xlog:gc:file=\"" + logs.resolve(prefix + "-gc.log").toAbsolutePath()
+                    + "\":utctime,uptime,level");
+            try (AppProcess app = AppProcess.start(JAR, cell, db.getJdbcUrl(), db.getUsername(), db.getPassword(), log,
+                    gcLog, run.appArgs());
                     HttpClient client = HttpClient.newBuilder()
                             .version(HttpClient.Version.HTTP_1_1)
                             .connectTimeout(TIMEOUT)
@@ -163,14 +233,16 @@ class BreakingPointBenchmark {
                 requireDrainMetrics(app);
                 drain(app);
 
-                List<Double> rates = doubles(System.getProperty(
-                        "ledger.bench.rates.hot%02d".formatted(Math.round(run.hotShare() * 100)), RATES));
+                List<Double> rates = run.rates();
                 int failuresInARow = 0;
                 for (int index = 0; index < rates.size(); index++) {
                     double rate = rates.get(index);
                     LedgerBenchmark.ResourceSampler sampler = LedgerBenchmark.ResourceSampler.start(app);
-                    OpenLoad.Step step = OpenLoad.run(client, transfers, rate, STEP, TIMEOUT, MAX_IN_FLIGHT);
+                    PoolSampler pool = PoolSampler.start(app);
+                    OpenLoad.Step step = OpenLoad.run(client, transfers, rate, run.step(), TIMEOUT, MAX_IN_FLIGHT);
+                    List<PoolSampler.Sample> poolSamples = pool.stop();
                     LedgerBenchmark.ResourceSampler.Summary resources = sampler.stop();
+                    writeTimeSeries(run, index, rate, step, poolSamples);
                     Drain drain = drain(app);
                     boolean alive = app.alive();
                     boolean ledgerOk = ledgerHolds(db);
@@ -197,9 +269,59 @@ class BreakingPointBenchmark {
                         break;
                     }
                 }
+            } finally {
+                Files.writeString(logs.resolve(prefix + "-postgres.log"), db.getLogs(), StandardCharsets.UTF_8);
             }
         }
         return broken;
+    }
+
+    /**
+     * One JSON line per second of the step: outcomes of the requests scheduled in that second,
+     * next to the pool sample taken closest to it.
+     */
+    private static void writeTimeSeries(Run run, int index, double rate, OpenLoad.Step step,
+            List<PoolSampler.Sample> samples) throws IOException {
+        long cap = TIMEOUT.toNanos();
+        int seconds = (int) Math.ceil(step.scheduled() / rate);
+        StringBuilder out = new StringBuilder();
+        for (int second = 0; second < seconds; second++) {
+            int from = (int) Math.ceil(second * rate);
+            int to = (int) Math.min(step.scheduled(), Math.ceil((second + 1) * rate));
+            if (from >= to) {
+                continue;
+            }
+            int[] status = Arrays.copyOfRange(step.status(), from, to);
+            long[] latency = Arrays.copyOfRange(step.latencyNanos(), from, to);
+            Map<String, Object> r = new LinkedHashMap<>();
+            r.put("cell", run.cellId());
+            r.put("arm", run.arm());
+            r.put("repetition", run.repetition());
+            r.put("step", index);
+            r.put("offeredRps", rate);
+            r.put("second", second);
+            r.put("scheduled", to - from);
+            r.put("created", Arrays.stream(status).filter(s -> s == 201).count());
+            r.put("unavailable503", Arrays.stream(status).filter(s -> s == 503).count());
+            r.put("otherServerErrors", Arrays.stream(status).filter(s -> s >= 500 && s != 503).count());
+            r.put("timeouts", Arrays.stream(status).filter(s -> s == OpenLoad.TIMEOUT).count());
+            r.put("p99Ms", OpenLoad.percentileMs(latency, 99, cap));
+            PoolSampler.Sample nearest = null;
+            for (PoolSampler.Sample sample : samples) {
+                if (nearest == null || Math.abs(sample.secondsIntoStep() - second)
+                        < Math.abs(nearest.secondsIntoStep() - second)) {
+                    nearest = sample;
+                }
+            }
+            if (nearest != null && Math.abs(nearest.secondsIntoStep() - second) <= 1.5) {
+                r.put("poolPending", nearest.pending());
+                r.put("poolAcquireMeanMs", nearest.acquireMeanMs());
+                r.put("requestsActive", nearest.active());
+            }
+            out.append(LedgerBenchmark.json(r)).append('\n');
+        }
+        Files.writeString(OUT.resolve("timeseries.jsonl"), out.toString(), StandardCharsets.UTF_8,
+                StandardOpenOption.CREATE, StandardOpenOption.APPEND);
     }
 
     /** Transfers as in phase 2 (ADR 0012): the hot account on one side with probability {@code hotShare}. */
@@ -305,16 +427,19 @@ class BreakingPointBenchmark {
 
         Map<String, Object> r = new LinkedHashMap<>();
         r.put("cell", run.cellId());
+        r.put("name", run.name() == null ? "ladder" : run.name());
+        r.put("arm", run.arm());
         r.put("strategy", STRATEGY);
         r.put("hotShare", run.hotShare());
         r.put("repetition", run.repetition());
         r.put("step", index);
         r.put("offeredRps", rate);
+        r.put("stepSeconds", run.step().toSeconds());
         r.put("seconds", round(step.seconds()));
         r.put("scheduled", scheduled);
         r.put("created", created);
         // Per nominal step length: the wall time also holds the wait for the last timeouts.
-        double nominal = STEP.toMillis() / 1000.0;
+        double nominal = run.step().toMillis() / 1000.0;
         r.put("createdPerSecond", round(created / nominal));
         r.put("answeredPerSecond", round(step.count(s -> s > 0) / nominal));
         r.put("client4xx", step.count(s -> s >= 400 && s < 500));
@@ -343,6 +468,7 @@ class BreakingPointBenchmark {
         r.put("meanLoadGeneratorCpu", round(resources.meanLoadGeneratorCpu()));
         r.put("drained", drain.drained());
         r.put("drainSeconds", round(drain.seconds()));
+        r.put("startedAt", step.startedAt().toString());
         r.put("finishedAt", Instant.now().toString());
         return r;
     }
@@ -369,6 +495,9 @@ class BreakingPointBenchmark {
         info.put("maxInFlight", MAX_IN_FLIGHT);
         info.put("stopAfterFailures", STOP_AFTER_FAILURES);
         info.put("repetitions", REPETITIONS);
+        info.put("repetitionOffset", REPETITION_OFFSET);
+        info.put("cells", CELLS);
+        info.put("arms", String.join(",", ARMS));
         info.put("plannedRuns", plannedRuns);
         info.put("seed", SEED);
         info.put("sloP99Ms", SLO_P99_MS);

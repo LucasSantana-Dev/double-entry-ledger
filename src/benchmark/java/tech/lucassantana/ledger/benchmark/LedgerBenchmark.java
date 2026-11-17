@@ -467,7 +467,7 @@ class LedgerBenchmark {
         return Math.round(value * 100) / 100.0;
     }
 
-    /** Flat JSON object; values are numbers, booleans or strings without quotes or backslashes. */
+    /** Flat JSON object; values are numbers, booleans, null or strings without quotes or backslashes. */
     static String json(Map<String, Object> fields) {
         StringBuilder out = new StringBuilder("{");
         fields.forEach((key, value) -> {
@@ -475,7 +475,7 @@ class LedgerBenchmark {
                 out.append(',');
             }
             out.append('"').append(key).append("\":");
-            out.append(value instanceof Number || value instanceof Boolean ? value.toString() : "\"" + value + "\"");
+            out.append(value == null || value instanceof Number || value instanceof Boolean ? String.valueOf(value) : "\"" + value + "\"");
         });
         return out.append('}').toString();
     }

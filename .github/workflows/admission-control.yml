@@ -1,0 +1,83 @@
+name: Admission control
+
+# Manual only (spec docs/specs/2026-11-17-admission-control). Each job is one repetition with
+# every cell and arm, so comparisons inside a job share the runner's CPU; the aggregate job
+# merges the jobs. The fallbacks after || are the input defaults, for a run started without
+# inputs.
+on:
+  workflow_dispatch:
+    inputs:
+      cells:
+        description: Cells, name:hotShare:rate,rate,...[:stepDuration] separated by ;
+        type: string
+        default: 'climb:0:1000,1100,1200,1300,1400,1500,1000;jump:0:1500,1500,1000;hold:0.9:650:PT10M'
+      arms:
+        description: Comma-separated arms (baseline, hikari, limiter)
+        type: string
+        default: 'baseline,hikari,limiter'
+      step:
+        description: Duration of each step, ISO-8601
+        type: string
+        default: PT2M
+
+permissions:
+  contents: read
+
+jobs:
+  repetition:
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    strategy:
+      fail-fast: false
+      matrix:
+        rep: [1, 2, 3, 4, 5]
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: maven
+      # Inputs go through the environment, never straight into the script.
+      - name: Run every cell and arm once
+        env:
+          CELLS: ${{ inputs.cells || 'climb:0:1000,1100,1200,1300,1400,1500,1000;jump:0:1500,1500,1000;hold:0.9:650:PT10M' }}
+          ARMS: ${{ inputs.arms || 'baseline,hikari,limiter' }}
+          STEP: ${{ inputs.step || 'PT2M' }}
+          REP: ${{ matrix.rep }}
+        run: |
+          lscpu | grep -E 'Model name|^CPU\(s\)'
+          ./mvnw -B -Pbenchmark verify \
+            "-Dledger.bench.include=**/BreakingPointBenchmark.java" \
+            "-Dledger.bench.cells=$CELLS" \
+            "-Dledger.bench.arms=$ARMS" \
+            "-Dledger.bench.step=$STEP" \
+            "-Dledger.bench.repetitions=1" \
+            "-Dledger.bench.repetition-offset=$((REP - 1))" \
+            "-Dledger.bench.stop-after-failures=0"
+      - name: Keep the repetition
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: admission-rep-${{ matrix.rep }}
+          path: target/benchmark/
+          if-no-files-found: warn
+
+  aggregate:
+    needs: repetition
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: admission-rep-*
+          path: reps
+      - name: Aggregate
+        run: |
+          python3 tools/benchmark/admission.py out reps/*
+          cat out/results.md >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: admission-control-${{ github.run_id }}
+          path: out/

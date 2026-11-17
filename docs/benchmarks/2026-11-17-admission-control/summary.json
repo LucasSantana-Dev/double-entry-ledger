@@ -1,0 +1,1102 @@
+{
+  "runs": [
+    {
+      "startedAt": "2026-11-17T07:17:27.724516575Z",
+      "githubRunId": "44037483385",
+      "cpu": "Intel(R) Xeon(R) 6975P-C",
+      "logicalCpus": 4,
+      "os": "Linux 7.0.0-1016-aws",
+      "java": "25.0.5+8-LTS",
+      "strategy": "conditional-update",
+      "hotShares": "[0.0,0.9]",
+      "rates": "250,500,1000,1500,2000,3000,4000",
+      "rates.hot00": "250,500,1000,1500,2000,3000,4000",
+      "rates.hot90": "250,500,1000,1500,2000,3000,4000",
+      "step": "PT2M",
+      "warmup": "PT30S",
+      "warmupRate": 250.0,
+      "timeout": "PT5S",
+      "maxInFlight": 10000,
+      "stopAfterFailures": 0,
+      "repetitions": 1,
+      "repetitionOffset": 0,
+      "cells": "climb:0:1000,1100,1200,1300,1400,1500,1000;jump:0:1500,1500,1000;hold:0.9:650:PT10M",
+      "arms": "baseline,hikari,limiter",
+      "plannedRuns": 9,
+      "seed": 20261116,
+      "sloP99Ms": 500.0,
+      "sloErrorShare": 0.01
+    },
+    {
+      "startedAt": "2026-11-17T07:17:15.957178230Z",
+      "githubRunId": "44037483385",
+      "cpu": "AMD EPYC 9V74 80-Core Processor",
+      "logicalCpus": 4,
+      "os": "Linux 7.0.0-1019-azure",
+      "java": "25.0.5+8-LTS",
+      "strategy": "conditional-update",
+      "hotShares": "[0.0,0.9]",
+      "rates": "250,500,1000,1500,2000,3000,4000",
+      "rates.hot00": "250,500,1000,1500,2000,3000,4000",
+      "rates.hot90": "250,500,1000,1500,2000,3000,4000",
+      "step": "PT2M",
+      "warmup": "PT30S",
+      "warmupRate": 250.0,
+      "timeout": "PT5S",
+      "maxInFlight": 10000,
+      "stopAfterFailures": 0,
+      "repetitions": 1,
+      "repetitionOffset": 1,
+      "cells": "climb:0:1000,1100,1200,1300,1400,1500,1000;jump:0:1500,1500,1000;hold:0.9:650:PT10M",
+      "arms": "baseline,hikari,limiter",
+      "plannedRuns": 9,
+      "seed": 20261116,
+      "sloP99Ms": 500.0,
+      "sloErrorShare": 0.01
+    },
+    {
+      "startedAt": "2026-11-17T07:17:25.524557765Z",
+      "githubRunId": "44037483385",
+      "cpu": "INTEL(R) XEON(R) PLATINUM 8573C",
+      "logicalCpus": 4,
+      "os": "Linux 7.0.0-1019-azure",
+      "java": "25.0.5+8-LTS",
+      "strategy": "conditional-update",
+      "hotShares": "[0.0,0.9]",
+      "rates": "250,500,1000,1500,2000,3000,4000",
+      "rates.hot00": "250,500,1000,1500,2000,3000,4000",
+      "rates.hot90": "250,500,1000,1500,2000,3000,4000",
+      "step": "PT2M",
+      "warmup": "PT30S",
+      "warmupRate": 250.0,
+      "timeout": "PT5S",
+      "maxInFlight": 10000,
+      "stopAfterFailures": 0,
+      "repetitions": 1,
+      "repetitionOffset": 2,
+      "cells": "climb:0:1000,1100,1200,1300,1400,1500,1000;jump:0:1500,1500,1000;hold:0.9:650:PT10M",
+      "arms": "baseline,hikari,limiter",
+      "plannedRuns": 9,
+      "seed": 20261116,
+      "sloP99Ms": 500.0,
+      "sloErrorShare": 0.01
+    },
+    {
+      "startedAt": "2026-11-17T07:17:16.342180647Z",
+      "githubRunId": "44037483385",
+      "cpu": "AMD EPYC 9V45 96-Core Processor",
+      "logicalCpus": 4,
+      "os": "Linux 7.0.0-1019-azure",
+      "java": "25.0.5+8-LTS",
+      "strategy": "conditional-update",
+      "hotShares": "[0.0,0.9]",
+      "rates": "250,500,1000,1500,2000,3000,4000",
+      "rates.hot00": "250,500,1000,1500,2000,3000,4000",
+      "rates.hot90": "250,500,1000,1500,2000,3000,4000",
+      "step": "PT2M",
+      "warmup": "PT30S",
+      "warmupRate": 250.0,
+      "timeout": "PT5S",
+      "maxInFlight": 10000,
+      "stopAfterFailures": 0,
+      "repetitions": 1,
+      "repetitionOffset": 3,
+      "cells": "climb:0:1000,1100,1200,1300,1400,1500,1000;jump:0:1500,1500,1000;hold:0.9:650:PT10M",
+      "arms": "baseline,hikari,limiter",
+      "plannedRuns": 9,
+      "seed": 20261116,
+      "sloP99Ms": 500.0,
+      "sloErrorShare": 0.01
+    },
+    {
+      "startedAt": "2026-11-17T07:17:16.810035425Z",
+      "githubRunId": "44037483385",
+      "cpu": "AMD EPYC 9V74 80-Core Processor",
+      "logicalCpus": 4,
+      "os": "Linux 7.0.0-1019-azure",
+      "java": "25.0.5+8-LTS",
+      "strategy": "conditional-update",
+      "hotShares": "[0.0,0.9]",
+      "rates": "250,500,1000,1500,2000,3000,4000",
+      "rates.hot00": "250,500,1000,1500,2000,3000,4000",
+      "rates.hot90": "250,500,1000,1500,2000,3000,4000",
+      "step": "PT2M",
+      "warmup": "PT30S",
+      "warmupRate": 250.0,
+      "timeout": "PT5S",
+      "maxInFlight": 10000,
+      "stopAfterFailures": 0,
+      "repetitions": 1,
+      "repetitionOffset": 4,
+      "cells": "climb:0:1000,1100,1200,1300,1400,1500,1000;jump:0:1500,1500,1000;hold:0.9:650:PT10M",
+      "arms": "baseline,hikari,limiter",
+      "plannedRuns": 9,
+      "seed": 20261116,
+      "sloP99Ms": 500.0,
+      "sloErrorShare": 0.01
+    }
+  ],
+  "cells": {
+    "climb-baseline": [
+      {
+        "step": 0,
+        "offeredRps": 1000.0,
+        "runs": 5,
+        "sloPass": 5,
+        "createdPerSecond": 1000.0,
+        "p99Ms": 161.1,
+        "errorShare": 0.0,
+        "unavailable503": 0,
+        "timeouts": 0,
+        "peakHeapMb": 652,
+        "ledgerOk": true,
+        "client4xx": 0
+      },
+      {
+        "step": 1,
+        "offeredRps": 1100.0,
+        "runs": 5,
+        "sloPass": 5,
+        "createdPerSecond": 1100.0,
+        "p99Ms": 9.3,
+        "errorShare": 0.0,
+        "unavailable503": 0,
+        "timeouts": 0,
+        "peakHeapMb": 661,
+        "ledgerOk": true,
+        "client4xx": 0
+      },
+      {
+        "step": 2,
+        "offeredRps": 1200.0,
+        "runs": 5,
+        "sloPass": 5,
+        "createdPerSecond": 1200.0,
+        "p99Ms": 12.8,
+        "errorShare": 0.0,
+        "unavailable503": 0,
+        "timeouts": 0,
+        "peakHeapMb": 666,
+        "ledgerOk": true,
+        "client4xx": 0
+      },
+      {
+        "step": 3,
+        "offeredRps": 1300.0,
+        "runs": 5,
+        "sloPass": 3,
+        "createdPerSecond": 1300.0,
+        "p99Ms": 289.9,
+        "errorShare": 0.0,
+        "unavailable503": 0,
+        "timeouts": 0,
+        "peakHeapMb": 661,
+        "ledgerOk": true,
+        "client4xx": 0
+      },
+      {
+        "step": 4,
+        "offeredRps": 1400.0,
+        "runs": 5,
+        "sloPass": 2,
+        "createdPerSecond": 1400.0,
+        "p99Ms": 1829.1,
+        "errorShare": 0.0,
+        "unavailable503": 0,
+        "timeouts": 0,
+        "peakHeapMb": 772,
+        "ledgerOk": true,
+        "client4xx": 0
+      },
+      {
+        "step": 5,
+        "offeredRps": 1500.0,
+        "runs": 5,
+        "sloPass": 2,
+        "createdPerSecond": 402.48,
+        "p99Ms": 5000.0,
+        "errorShare": 0.7317,
+        "unavailable503": 0,
+        "timeouts": 108749,
+        "peakHeapMb": 995,
+        "ledgerOk": true,
+        "client4xx": 0
+      },
+      {
+        "step": 6,
+        "offeredRps": 1000.0,
+        "runs": 5,
+        "sloPass": 5,
+        "createdPerSecond": 1000.0,
+        "p99Ms": 10.9,
+        "errorShare": 0.0,
+        "unavailable503": 0,
+        "timeouts": 0,
+        "peakHeapMb": 917,
+        "ledgerOk": true,
+        "client4xx": 0
+      }
+    ],
+    "climb-hikari": [
+      {
+        "step": 0,
+        "offeredRps": 1000.0,
+        "runs": 5,
+        "sloPass": 3,
+        "createdPerSecond": 1000.0,
+        "p99Ms": 124.8,
+        "errorShare": 0.0,
+        "unavailable503": 0,
+        "timeouts": 0,
+        "peakHeapMb": 658,
+        "ledgerOk": true,
+        "client4xx": 0
+      },
+      {
+        "step": 1,
+        "offeredRps": 1100.0,
+        "runs": 5,
+        "sloPass": 5,
+        "createdPerSecond": 1100.0,
+        "p99Ms": 9.9,
+        "errorShare": 0.0,
+        "unavailable503": 0,
+        "timeouts": 0,
+        "peakHeapMb": 662,
+        "ledgerOk": true,
+        "client4xx": 0
+      },
+      {
+        "step": 2,
+        "offeredRps": 1200.0,
+        "runs": 5,
+        "sloPass": 5,
+        "createdPerSecond": 1200.0,
+        "p99Ms": 13.7,
+        "errorShare": 0.0,
+        "unavailable503": 0,
+        "timeouts": 0,
+        "peakHeapMb": 660,
+        "ledgerOk": true,
+        "client4xx": 0
+      },
+      {
+        "step": 3,
+        "offeredRps": 1300.0,
+        "runs": 5,
+        "sloPass": 3,
+        "createdPerSecond": 1299.99,
+        "p99Ms": 227.2,
+        "errorShare": 0.0,
+        "unavailable503": 0,
+        "timeouts": 0,
+        "peakHeapMb": 746,
+        "ledgerOk": true,
+        "client4xx": 0
+      },
+      {
+        "step": 4,
+        "offeredRps": 1400.0,
+        "runs": 5,
+        "sloPass": 2,
+        "createdPerSecond": 1390.89,
+        "p99Ms": 877.8,
+        "errorShare": 0.0065,
+        "unavailable503": 0,
+        "timeouts": 0,
+        "peakHeapMb": 748,
+        "ledgerOk": true,
+        "client4xx": 0
+      },
+      {
+        "step": 5,
+        "offeredRps": 1500.0,
+        "runs": 5,
+        "sloPass": 2,
+        "createdPerSecond": 1296.58,
+        "p99Ms": 1015.0,
+        "errorShare": 0.1356,
+        "unavailable503": 0,
+        "timeouts": 0,
+        "peakHeapMb": 881,
+        "ledgerOk": true,
+        "client4xx": 0
+      },
+      {
+        "step": 6,
+        "offeredRps": 1000.0,
+        "runs": 5,
+        "sloPass": 5,
+        "createdPerSecond": 1000.0,
+        "p99Ms": 10.8,
+        "errorShare": 0.0,
+        "unavailable503": 0,
+        "timeouts": 0,
+        "peakHeapMb": 844,
+        "ledgerOk": true,
+        "client4xx": 0
+      }
+    ],
+    "climb-limiter": [
+      {
+        "step": 0,
+        "offeredRps": 1000.0,
+        "runs": 5,
+        "sloPass": 5,
+        "createdPerSecond": 1000.0,
+        "p99Ms": 81.2,
+        "errorShare": 0.0,
+        "unavailable503": 0,
+        "timeouts": 0,
+        "peakHeapMb": 653,
+        "ledgerOk": true,
+        "client4xx": 0
+      },
+      {
+        "step": 1,
+        "offeredRps": 1100.0,
+        "runs": 5,
+        "sloPass": 5,
+        "createdPerSecond": 1100.0,
+        "p99Ms": 9.8,
+        "errorShare": 0.0,
+        "unavailable503": 0,
+        "timeouts": 0,
+        "peakHeapMb": 659,
+        "ledgerOk": true,
+        "client4xx": 0
+      },
+      {
+        "step": 2,
+        "offeredRps": 1200.0,
+        "runs": 5,
+        "sloPass": 4,
+        "createdPerSecond": 1200.0,
+        "p99Ms": 13.0,
+        "errorShare": 0.0,
+        "unavailable503": 0,
+        "timeouts": 0,
+        "peakHeapMb": 659,
+        "ledgerOk": true,
+        "client4xx": 0
+      },
+      {
+        "step": 3,
+        "offeredRps": 1300.0,
+        "runs": 5,
+        "sloPass": 3,
+        "createdPerSecond": 1292.83,
+        "p99Ms": 116.3,
+        "errorShare": 0.0055,
+        "unavailable503": 860,
+        "timeouts": 0,
+        "peakHeapMb": 658,
+        "ledgerOk": true,
+        "client4xx": 0
+      },
+      {
+        "step": 4,
+        "offeredRps": 1400.0,
+        "runs": 5,
+        "sloPass": 3,
+        "createdPerSecond": 1397.16,
+        "p99Ms": 111.4,
+        "errorShare": 0.002,
+        "unavailable503": 341,
+        "timeouts": 0,
+        "peakHeapMb": 661,
+        "ledgerOk": true,
+        "client4xx": 0
+      },
+      {
+        "step": 5,
+        "offeredRps": 1500.0,
+        "runs": 5,
+        "sloPass": 2,
+        "createdPerSecond": 1365.65,
+        "p99Ms": 121.9,
+        "errorShare": 0.0896,
+        "unavailable503": 16122,
+        "timeouts": 0,
+        "peakHeapMb": 663,
+        "ledgerOk": true,
+        "client4xx": 0
+      },
+      {
+        "step": 6,
+        "offeredRps": 1000.0,
+        "runs": 5,
+        "sloPass": 5,
+        "createdPerSecond": 1000.0,
+        "p99Ms": 8.5,
+        "errorShare": 0.0,
+        "unavailable503": 0,
+        "timeouts": 0,
+        "peakHeapMb": 671,
+        "ledgerOk": true,
+        "client4xx": 0
+      }
+    ],
+    "hold-baseline": [
+      {
+        "step": 0,
+        "offeredRps": 650.0,
+        "runs": 5,
+        "sloPass": 0,
+        "createdPerSecond": 13.31,
+        "p99Ms": 5000.0,
+        "errorShare": 0.9795,
+        "unavailable503": 0,
+        "timeouts": 348058,
+        "peakHeapMb": 1015,
+        "ledgerOk": true,
+        "client4xx": 0
+      }
+    ],
+    "hold-hikari": [
+      {
+        "step": 0,
+        "offeredRps": 650.0,
+        "runs": 5,
+        "sloPass": 0,
+        "createdPerSecond": 617.27,
+        "p99Ms": 1042.2,
+        "errorShare": 0.0504,
+        "unavailable503": 0,
+        "timeouts": 0,
+        "peakHeapMb": 755,
+        "ledgerOk": true,
+        "client4xx": 0
+      }
+    ],
+    "hold-limiter": [
+      {
+        "step": 0,
+        "offeredRps": 650.0,
+        "runs": 5,
+        "sloPass": 0,
+        "createdPerSecond": 619.23,
+        "p99Ms": 158.9,
+        "errorShare": 0.0473,
+        "unavailable503": 18465,
+        "timeouts": 0,
+        "peakHeapMb": 662,
+        "ledgerOk": true,
+        "client4xx": 0
+      }
+    ],
+    "jump-baseline": [
+      {
+        "step": 0,
+        "offeredRps": 1500.0,
+        "runs": 5,
+        "sloPass": 0,
+        "createdPerSecond": 199.13,
+        "p99Ms": 5000.0,
+        "errorShare": 0.8672,
+        "unavailable503": 0,
+        "timeouts": 120444,
+        "peakHeapMb": 1012,
+        "ledgerOk": true,
+        "client4xx": 0
+      },
+      {
+        "step": 1,
+        "offeredRps": 1500.0,
+        "runs": 5,
+        "sloPass": 2,
+        "createdPerSecond": 1467.48,
+        "p99Ms": 5000.0,
+        "errorShare": 0.0217,
+        "unavailable503": 0,
+        "timeouts": 3902,
+        "peakHeapMb": 963,
+        "ledgerOk": true,
+        "client4xx": 0
+      },
+      {
+        "step": 2,
+        "offeredRps": 1000.0,
+        "runs": 5,
+        "sloPass": 5,
+        "createdPerSecond": 1000.0,
+        "p99Ms": 12.7,
+        "errorShare": 0.0,
+        "unavailable503": 0,
+        "timeouts": 0,
+        "peakHeapMb": 929,
+        "ledgerOk": true,
+        "client4xx": 0
+      }
+    ],
+    "jump-hikari": [
+      {
+        "step": 0,
+        "offeredRps": 1500.0,
+        "runs": 5,
+        "sloPass": 0,
+        "createdPerSecond": 1297.14,
+        "p99Ms": 1077.7,
+        "errorShare": 0.1352,
+        "unavailable503": 0,
+        "timeouts": 0,
+        "peakHeapMb": 906,
+        "ledgerOk": true,
+        "client4xx": 0
+      },
+      {
+        "step": 1,
+        "offeredRps": 1500.0,
+        "runs": 5,
+        "sloPass": 2,
+        "createdPerSecond": 1445.55,
+        "p99Ms": 1004.9,
+        "errorShare": 0.0363,
+        "unavailable503": 0,
+        "timeouts": 0,
+        "peakHeapMb": 907,
+        "ledgerOk": true,
+        "client4xx": 0
+      },
+      {
+        "step": 2,
+        "offeredRps": 1000.0,
+        "runs": 5,
+        "sloPass": 4,
+        "createdPerSecond": 1000.0,
+        "p99Ms": 8.4,
+        "errorShare": 0.0,
+        "unavailable503": 0,
+        "timeouts": 0,
+        "peakHeapMb": 852,
+        "ledgerOk": true,
+        "client4xx": 0
+      }
+    ],
+    "jump-limiter": [
+      {
+        "step": 0,
+        "offeredRps": 1500.0,
+        "runs": 5,
+        "sloPass": 1,
+        "createdPerSecond": 1397.46,
+        "p99Ms": 125.5,
+        "errorShare": 0.0684,
+        "unavailable503": 12305,
+        "timeouts": 0,
+        "peakHeapMb": 667,
+        "ledgerOk": true,
+        "client4xx": 0
+      },
+      {
+        "step": 1,
+        "offeredRps": 1500.0,
+        "runs": 5,
+        "sloPass": 3,
+        "createdPerSecond": 1495.26,
+        "p99Ms": 111.8,
+        "errorShare": 0.0032,
+        "unavailable503": 569,
+        "timeouts": 0,
+        "peakHeapMb": 668,
+        "ledgerOk": true,
+        "client4xx": 0
+      },
+      {
+        "step": 2,
+        "offeredRps": 1000.0,
+        "runs": 5,
+        "sloPass": 5,
+        "createdPerSecond": 1000.0,
+        "p99Ms": 7.6,
+        "errorShare": 0.0,
+        "unavailable503": 0,
+        "timeouts": 0,
+        "peakHeapMb": 671,
+        "ledgerOk": true,
+        "client4xx": 0
+      }
+    ]
+  },
+  "pathEffect": [
+    {
+      "arm": "baseline",
+      "repetition": 1,
+      "climbPass": true,
+      "jumpPass": false,
+      "climbCreated": 1500.0,
+      "jumpCreated": 1499.45
+    },
+    {
+      "arm": "baseline",
+      "repetition": 2,
+      "climbPass": false,
+      "jumpPass": false,
+      "climbCreated": 306.58,
+      "jumpCreated": 149.52
+    },
+    {
+      "arm": "baseline",
+      "repetition": 3,
+      "climbPass": false,
+      "jumpPass": false,
+      "climbCreated": 402.48,
+      "jumpCreated": 199.13
+    },
+    {
+      "arm": "baseline",
+      "repetition": 4,
+      "climbPass": true,
+      "jumpPass": false,
+      "climbCreated": 1500.0,
+      "jumpCreated": 1500.0
+    },
+    {
+      "arm": "baseline",
+      "repetition": 5,
+      "climbPass": false,
+      "jumpPass": false,
+      "climbCreated": 278.88,
+      "jumpCreated": 129.69
+    },
+    {
+      "arm": "hikari",
+      "repetition": 1,
+      "climbPass": true,
+      "jumpPass": false,
+      "climbCreated": 1500.0,
+      "jumpCreated": 1451.69
+    },
+    {
+      "arm": "hikari",
+      "repetition": 2,
+      "climbPass": false,
+      "jumpPass": false,
+      "climbCreated": 1155.78,
+      "jumpCreated": 1150.27
+    },
+    {
+      "arm": "hikari",
+      "repetition": 3,
+      "climbPass": false,
+      "jumpPass": false,
+      "climbCreated": 1296.58,
+      "jumpCreated": 1297.14
+    },
+    {
+      "arm": "hikari",
+      "repetition": 4,
+      "climbPass": true,
+      "jumpPass": false,
+      "climbCreated": 1500.0,
+      "jumpCreated": 1464.47
+    },
+    {
+      "arm": "hikari",
+      "repetition": 5,
+      "climbPass": false,
+      "jumpPass": false,
+      "climbCreated": 1139.22,
+      "jumpCreated": 954.26
+    },
+    {
+      "arm": "limiter",
+      "repetition": 1,
+      "climbPass": true,
+      "jumpPass": false,
+      "climbCreated": 1500.0,
+      "jumpCreated": 1480.08
+    },
+    {
+      "arm": "limiter",
+      "repetition": 2,
+      "climbPass": false,
+      "jumpPass": false,
+      "climbCreated": 1238.19,
+      "jumpCreated": 1254.78
+    },
+    {
+      "arm": "limiter",
+      "repetition": 3,
+      "climbPass": false,
+      "jumpPass": false,
+      "climbCreated": 1365.65,
+      "jumpCreated": 1397.46
+    },
+    {
+      "arm": "limiter",
+      "repetition": 4,
+      "climbPass": true,
+      "jumpPass": true,
+      "climbCreated": 1500.0,
+      "jumpCreated": 1485.42
+    },
+    {
+      "arm": "limiter",
+      "repetition": 5,
+      "climbPass": false,
+      "jumpPass": false,
+      "climbCreated": 1168.05,
+      "jumpCreated": 1175.76
+    }
+  ],
+  "arms": {
+    "baseline": [
+      {
+        "step": 0,
+        "runs": 5,
+        "sloPass": 0,
+        "createdPerSecond": 199.13,
+        "createdVsBaseline": null,
+        "p99Ms": 5000.0,
+        "errorShare": 0.8672,
+        "unavailable503": 0,
+        "timeouts": 120444,
+        "peakHeapMb": 1012
+      },
+      {
+        "step": 1,
+        "runs": 5,
+        "sloPass": 2,
+        "createdPerSecond": 1467.48,
+        "createdVsBaseline": null,
+        "p99Ms": 5000.0,
+        "errorShare": 0.0217,
+        "unavailable503": 0,
+        "timeouts": 3902,
+        "peakHeapMb": 963
+      },
+      {
+        "step": 2,
+        "runs": 5,
+        "sloPass": 5,
+        "createdPerSecond": 1000.0,
+        "createdVsBaseline": null,
+        "p99Ms": 12.7,
+        "errorShare": 0.0,
+        "unavailable503": 0,
+        "timeouts": 0,
+        "peakHeapMb": 929
+      }
+    ],
+    "hikari": [
+      {
+        "step": 0,
+        "runs": 5,
+        "sloPass": 0,
+        "createdPerSecond": 1297.14,
+        "createdVsBaseline": 824.5699999999999,
+        "p99Ms": 1077.7,
+        "errorShare": 0.1352,
+        "unavailable503": 0,
+        "timeouts": 0,
+        "peakHeapMb": 906
+      },
+      {
+        "step": 1,
+        "runs": 5,
+        "sloPass": 2,
+        "createdPerSecond": 1445.55,
+        "createdVsBaseline": 0.0,
+        "p99Ms": 1004.9,
+        "errorShare": 0.0363,
+        "unavailable503": 0,
+        "timeouts": 0,
+        "peakHeapMb": 907
+      },
+      {
+        "step": 2,
+        "runs": 5,
+        "sloPass": 4,
+        "createdPerSecond": 1000.0,
+        "createdVsBaseline": 0.0,
+        "p99Ms": 8.4,
+        "errorShare": 0.0,
+        "unavailable503": 0,
+        "timeouts": 0,
+        "peakHeapMb": 852
+      }
+    ],
+    "limiter": [
+      {
+        "step": 0,
+        "runs": 5,
+        "sloPass": 1,
+        "createdPerSecond": 1397.46,
+        "createdVsBaseline": 1046.07,
+        "p99Ms": 125.5,
+        "errorShare": 0.0684,
+        "unavailable503": 12305,
+        "timeouts": 0,
+        "peakHeapMb": 667
+      },
+      {
+        "step": 1,
+        "runs": 5,
+        "sloPass": 3,
+        "createdPerSecond": 1495.26,
+        "createdVsBaseline": 27.779999999999973,
+        "p99Ms": 111.8,
+        "errorShare": 0.0032,
+        "unavailable503": 569,
+        "timeouts": 0,
+        "peakHeapMb": 668
+      },
+      {
+        "step": 2,
+        "runs": 5,
+        "sloPass": 5,
+        "createdPerSecond": 1000.0,
+        "createdVsBaseline": 0.0,
+        "p99Ms": 7.6,
+        "errorShare": 0.0,
+        "unavailable503": 0,
+        "timeouts": 0,
+        "peakHeapMb": 671
+      }
+    ]
+  },
+  "hold": {
+    "baseline": {
+      "stepWithinSlo": 0,
+      "repetitions": 5,
+      "windows": [
+        {
+          "window": 1,
+          "createdPerSecond": 57.88333333333333,
+          "slowSeconds": 120
+        },
+        {
+          "window": 2,
+          "createdPerSecond": 2.066666666666667,
+          "slowSeconds": 120
+        },
+        {
+          "window": 3,
+          "createdPerSecond": 2.15,
+          "slowSeconds": 120
+        },
+        {
+          "window": 4,
+          "createdPerSecond": 2.0083333333333333,
+          "slowSeconds": 120
+        },
+        {
+          "window": 5,
+          "createdPerSecond": 2.4583333333333335,
+          "slowSeconds": 120
+        }
+      ],
+      "onsets": [
+        {
+          "repetition": 1,
+          "second": 0,
+          "poolPending": 0.0,
+          "checkpoint": false,
+          "autovacuum": false,
+          "gc": false
+        },
+        {
+          "repetition": 1,
+          "second": 344,
+          "poolPending": 63.0,
+          "checkpoint": true,
+          "autovacuum": false,
+          "gc": false
+        },
+        {
+          "repetition": 2,
+          "second": 0,
+          "poolPending": 0.0,
+          "checkpoint": false,
+          "autovacuum": false,
+          "gc": true
+        },
+        {
+          "repetition": 3,
+          "second": 0,
+          "poolPending": 0.0,
+          "checkpoint": false,
+          "autovacuum": false,
+          "gc": true
+        },
+        {
+          "repetition": 4,
+          "second": 2,
+          "poolPending": 177.0,
+          "checkpoint": false,
+          "autovacuum": false,
+          "gc": false
+        },
+        {
+          "repetition": 4,
+          "second": 360,
+          "poolPending": 153.0,
+          "checkpoint": true,
+          "autovacuum": false,
+          "gc": false
+        },
+        {
+          "repetition": 5,
+          "second": 0,
+          "poolPending": 0.0,
+          "checkpoint": false,
+          "autovacuum": false,
+          "gc": true
+        }
+      ],
+      "chance": {
+        "checkpoint": 0.6143333333333333,
+        "autovacuum": 0.219,
+        "gc": 0.6916666666666667
+      },
+      "heldSeconds": 3000,
+      "secondsWithoutPoolSample": 17
+    },
+    "hikari": {
+      "stepWithinSlo": 0,
+      "repetitions": 5,
+      "windows": [
+        {
+          "window": 1,
+          "createdPerSecond": 588.1,
+          "slowSeconds": 62
+        },
+        {
+          "window": 2,
+          "createdPerSecond": 650.0,
+          "slowSeconds": 0
+        },
+        {
+          "window": 3,
+          "createdPerSecond": 615.75,
+          "slowSeconds": 24
+        },
+        {
+          "window": 4,
+          "createdPerSecond": 582.5083333333333,
+          "slowSeconds": 75
+        },
+        {
+          "window": 5,
+          "createdPerSecond": 650.0,
+          "slowSeconds": 0
+        }
+      ],
+      "onsets": [
+        {
+          "repetition": 1,
+          "second": 0,
+          "poolPending": 0.0,
+          "checkpoint": false,
+          "autovacuum": false,
+          "gc": false
+        },
+        {
+          "repetition": 1,
+          "second": 347,
+          "poolPending": 135.0,
+          "checkpoint": true,
+          "autovacuum": false,
+          "gc": false
+        },
+        {
+          "repetition": 2,
+          "second": 0,
+          "poolPending": 0.0,
+          "checkpoint": false,
+          "autovacuum": false,
+          "gc": false
+        },
+        {
+          "repetition": 3,
+          "second": 0,
+          "poolPending": 0.0,
+          "checkpoint": false,
+          "autovacuum": false,
+          "gc": false
+        },
+        {
+          "repetition": 3,
+          "second": 336,
+          "poolPending": 167.0,
+          "checkpoint": true,
+          "autovacuum": false,
+          "gc": false
+        },
+        {
+          "repetition": 4,
+          "second": 0,
+          "poolPending": 0.0,
+          "checkpoint": false,
+          "autovacuum": false,
+          "gc": false
+        },
+        {
+          "repetition": 4,
+          "second": 359,
+          "poolPending": 236.0,
+          "checkpoint": true,
+          "autovacuum": false,
+          "gc": false
+        },
+        {
+          "repetition": 5,
+          "second": 0,
+          "poolPending": 0.0,
+          "checkpoint": false,
+          "autovacuum": false,
+          "gc": false
+        }
+      ],
+      "chance": {
+        "checkpoint": 0.6143333333333333,
+        "autovacuum": 0.22333333333333333,
+        "gc": 0.0
+      },
+      "heldSeconds": 3000,
+      "secondsWithoutPoolSample": 0
+    },
+    "limiter": {
+      "stepWithinSlo": 0,
+      "repetitions": 5,
+      "windows": [
+        {
+          "window": 1,
+          "createdPerSecond": 592.4,
+          "slowSeconds": 0
+        },
+        {
+          "window": 2,
+          "createdPerSecond": 650.0,
+          "slowSeconds": 0
+        },
+        {
+          "window": 3,
+          "createdPerSecond": 617.85,
+          "slowSeconds": 0
+        },
+        {
+          "window": 4,
+          "createdPerSecond": 585.925,
+          "slowSeconds": 0
+        },
+        {
+          "window": 5,
+          "createdPerSecond": 649.95,
+          "slowSeconds": 0
+        }
+      ],
+      "onsets": [],
+      "chance": {
+        "checkpoint": 0.6136666666666667,
+        "autovacuum": 0.21966666666666668,
+        "gc": 0.0
+      },
+      "heldSeconds": 3000,
+      "secondsWithoutPoolSample": 0
+    }
+  },
+  "missingRepetitions": [],
+  "failedRuns": []
+}
