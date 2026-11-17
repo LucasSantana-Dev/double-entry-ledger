@@ -42,8 +42,9 @@ final class OpenLoad {
      * @param status       HTTP status, or {@link #TIMEOUT}, {@link #CONNECTION_ERROR}, {@link #UNSENT}
      * @param sendLagNanos actual send time minus scheduled time: how far behind the generator was
      * @param seconds      wall time from the first scheduled send to the last answer
+     * @param startedAt    wall-clock time of the first scheduled send, to line steps up with logs
      */
-    record Step(long[] latencyNanos, int[] status, long[] sendLagNanos, double seconds) {
+    record Step(long[] latencyNanos, int[] status, long[] sendLagNanos, double seconds, java.time.Instant startedAt) {
 
         int scheduled() {
             return status.length;
@@ -77,6 +78,7 @@ final class OpenLoad {
         AtomicInteger inFlight = new AtomicInteger();
         double intervalNanos = 1e9 / rate;
         long start = System.nanoTime() + 10_000_000;
+        java.time.Instant startedAt = java.time.Instant.now().plusMillis(10);
         // close() waits for every sender, and each one is bounded by the request timeout. It also
         // publishes the senders' writes to the arrays to this thread.
         try (ExecutorService senders = Executors.newVirtualThreadPerTaskExecutor()) {
@@ -114,7 +116,7 @@ final class OpenLoad {
                 });
             }
         }
-        return new Step(latency, status, lag, (System.nanoTime() - start) / 1e9);
+        return new Step(latency, status, lag, (System.nanoTime() - start) / 1e9, startedAt);
     }
 
     /** Parks until the deadline; returns at once when already late, so lateness shows up as latency. */
