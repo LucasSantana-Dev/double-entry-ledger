@@ -1,10 +1,13 @@
 package tech.lucassantana.ledger.api;
 
 import java.net.URI;
+import java.sql.SQLTransientConnectionException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
+import org.springframework.jdbc.CannotGetJdbcConnectionException;
+import org.springframework.transaction.CannotCreateTransactionException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import tech.lucassantana.ledger.account.AccountNotFoundException;
@@ -63,6 +66,25 @@ class ApiExceptionHandler {
         return ResponseEntity.status(503)
                 .header(HttpHeaders.RETRY_AFTER, "1")
                 .body(problem(503, "concurrency-conflict", ex));
+    }
+
+    /**
+     * No database connection within the pool timeout (spec {@code docs/specs/2026-11-18-pool-bounds}):
+     * the same answer as the admission filter, since nothing was written. Any other failure to get
+     * a connection or begin a transaction is rethrown and stays a 500.
+     */
+    @ExceptionHandler({CannotCreateTransactionException.class, CannotGetJdbcConnectionException.class})
+    ResponseEntity<ProblemDetail> noConnection(RuntimeException ex) {
+        for (Throwable t = ex; t != null; t = t.getCause()) {
+            if (t instanceof SQLTransientConnectionException) {
+                ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatusCode.valueOf(503),
+                        "No database connection available in time; retry after the Retry-After delay.");
+                problem.setType(URI.create("/problems/overloaded"));
+                problem.setTitle("overloaded");
+                return ResponseEntity.status(503).header(HttpHeaders.RETRY_AFTER, "1").body(problem);
+            }
+        }
+        throw ex;
     }
 
     private static ProblemDetail problem(int status, String type, RuntimeException ex) {
