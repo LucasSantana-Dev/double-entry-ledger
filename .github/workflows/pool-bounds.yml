@@ -7,6 +7,10 @@ name: Pool bounds
 # write limiter on. The fallbacks after || are the input defaults, for a run started without
 # inputs.
 on:
+  # TEMPORARY: calibration run from the branch; workflow_dispatch needs the file on main. Remove before review.
+  push:
+    branches: [feat/pool-bounds]
+    paths: [.github/workflows/pool-bounds.yml]
   workflow_dispatch:
     inputs:
       cells:
@@ -34,7 +38,7 @@ jobs:
     steps:
       - id: reps
         env:
-          REPS: ${{ inputs.reps || '5' }}
+          REPS: ${{ inputs.reps || '1' }}  # TEMPORARY calibration value
         run: |
           if [ "$REPS" = "1" ]; then echo 'reps=[1]' >> "$GITHUB_OUTPUT"; else echo 'reps=[1,2,3,4,5]' >> "$GITHUB_OUTPUT"; fi
 
@@ -56,8 +60,8 @@ jobs:
       # Inputs go through the environment, never straight into the script.
       - name: Run every cell and arm once
         env:
-          CELLS: ${{ inputs.cells || 'reads:0:800:PT2M:2000,4000,8000,16000,2000;backlog:0:1100,400:PT10M,PT2M' }}
-          ARMS: ${{ inputs.arms || 'current,pool1s,readlimit' }}
+          CELLS: ${{ inputs.cells || 'reads:0:800:PT2M:1000,2000,4000,8000,12000,16000,24000,1000;backlog:0:1100,400:PT10M,PT2M' }}  # TEMPORARY calibration ladder
+          ARMS: ${{ inputs.arms || 'current' }}  # TEMPORARY calibration arm
           REP: ${{ matrix.rep }}
         run: |
           lscpu | grep -E 'Model name|^CPU\(s\)'
