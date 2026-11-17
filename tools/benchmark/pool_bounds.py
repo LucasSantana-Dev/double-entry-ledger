@@ -15,7 +15,7 @@ from collections import defaultdict
 from pathlib import Path
 
 BASE = "current"
-ARMS = [BASE, "pool1s", "readlimit"]
+ARMS = [BASE, "pool1s", "readlimit", "writes8"]
 WINDOW_SECONDS = 120
 
 

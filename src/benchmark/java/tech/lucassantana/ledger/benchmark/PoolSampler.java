@@ -4,6 +4,11 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
+import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.OffsetSpec;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.common.TopicPartition;
 
 /**
  * Samples the application's database pool and request queue once a second during a step (spec
@@ -13,6 +18,14 @@ import java.util.Map;
  * oldest row and the statement consumer's lag; without a broker these read 0 or null. The reads
  * go out together and the sample is stamped when they finished; a read the swamped
  * server does not answer within a second is recorded as missing (null).
+ *
+ * <p>The consumer lag is read by the harness from the broker, not from the application: the sum
+ * over the partitions of {@code ledger.transfers} of the log end offset minus the statement
+ * group's committed offset, that is the events published but not yet applied to the statement.
+ * The application's {@code kafka.consumer.fetch.manager.records.lag.max} meter was dropped: it is
+ * a maximum over the client's fetches in a sample window, not a backlog, and in calibration run
+ * 44171716101 it read 709,528 while the reconciliation reported 328,797 transfers missing from the
+ * statement, more than the transfers produced in the step.
  */
 final class PoolSampler {
 
@@ -21,24 +34,54 @@ final class PoolSampler {
             Double outboxOldestAgeSeconds, Double consumerLag) {
     }
 
-    /** Statement consumer lag: the largest records lag of the listener's consumer (spec 2026-11-18-pool-bounds). */
-    static final String CONSUMER_LAG = "kafka.consumer.fetch.manager.records.lag.max";
+    /** The outbox topic and the statement consumer's group ({@code ledger.statement.group-id}'s default). */
+    static final String TOPIC = "ledger.transfers";
+    static final String GROUP = "ledger-statement";
 
     private static final Duration POLL_TIMEOUT = Duration.ofSeconds(1);
 
     private final AppProcess app;
+    private final Admin kafka;
     private final List<Sample> samples = new ArrayList<>();
     private final Thread thread;
     private final long startNanos = System.nanoTime();
     private volatile boolean running = true;
 
-    private PoolSampler(AppProcess app) {
+    private PoolSampler(AppProcess app, Admin kafka) {
         this.app = app;
+        this.kafka = kafka;
         this.thread = Thread.ofVirtual().start(this::loop);
     }
 
-    static PoolSampler start(AppProcess app) {
-        return new PoolSampler(app);
+    /** {@code kafka} is null without a broker; the consumer lag then reads null. */
+    static PoolSampler start(AppProcess app, Admin kafka) {
+        return new PoolSampler(app, kafka);
+    }
+
+    /**
+     * Events on the topic not yet committed by the statement group, summed over partitions; a
+     * partition the group never committed counts from offset 0. Null when the broker does not
+     * answer within a second.
+     */
+    static Double consumerLag(Admin kafka) {
+        try {
+            Map<TopicPartition, OffsetAndMetadata> committed = kafka.listConsumerGroupOffsets(GROUP)
+                    .partitionsToOffsetAndMetadata().get(1, TimeUnit.SECONDS);
+            Map<TopicPartition, OffsetSpec> latest = new java.util.HashMap<>();
+            kafka.describeTopics(List.of(TOPIC)).allTopicNames().get(1, TimeUnit.SECONDS).get(TOPIC).partitions()
+                    .forEach(p -> latest.put(new TopicPartition(TOPIC, p.partition()), OffsetSpec.latest()));
+            long lag = 0;
+            for (var end : kafka.listOffsets(latest).all().get(1, TimeUnit.SECONDS).entrySet()) {
+                OffsetAndMetadata done = committed.get(end.getKey());
+                lag += end.getValue().offset() - (done == null ? 0 : done.offset());
+            }
+            return (double) lag;
+        } catch (Exception e) {
+            if (e instanceof InterruptedException) {
+                Thread.currentThread().interrupt();
+            }
+            return null;
+        }
     }
 
     List<Sample> stop() throws InterruptedException {
@@ -64,7 +107,7 @@ final class PoolSampler {
             var ageRead = java.util.concurrent.CompletableFuture.supplyAsync(
                     () -> value("ledger.outbox.oldest.pending.age", "VALUE"), Thread::startVirtualThread);
             var lagRead = java.util.concurrent.CompletableFuture.supplyAsync(
-                    () -> value(CONSUMER_LAG, "VALUE"), Thread::startVirtualThread);
+                    () -> kafka == null ? null : consumerLag(kafka), Thread::startVirtualThread);
             Double pending = pendingRead.join();
             Double active = activeRead.join();
             Map<String, Double> acquire = acquireRead.join();

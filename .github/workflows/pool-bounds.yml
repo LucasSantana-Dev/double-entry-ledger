@@ -16,11 +16,11 @@ on:
       cells:
         description: Cells, name:hotShare:writeRates[:stepDurations[:readRates]] separated by ;
         type: string
-        default: 'reads:0:800:PT2M:2000,4000,8000,16000,2000;backlog:0:1100,400:PT10M,PT2M'
+        default: 'reads:0:400:PT2M:1000,2000,3000,4000,6000,8000,1000;backlog:0:1100,400:PT10M,PT10M'
       arms:
-        description: Comma-separated arms (current, pool1s, readlimit)
+        description: Comma-separated arms (current, pool1s, readlimit, writes8)
         type: string
-        default: 'current,pool1s,readlimit'
+        default: 'current,pool1s,readlimit,writes8'
       reps:
         description: Number of jobs, one repetition each (1 for the calibration run, 5 for the experiment)
         type: choice
@@ -38,14 +38,16 @@ jobs:
     steps:
       - id: reps
         env:
-          REPS: ${{ inputs.reps || '1' }}  # TEMPORARY calibration value
+          REPS: ${{ inputs.reps || '5' }}
         run: |
           if [ "$REPS" = "1" ]; then echo 'reps=[1]' >> "$GITHUB_OUTPUT"; else echo 'reps=[1,2,3,4,5]' >> "$GITHUB_OUTPUT"; fi
 
   repetition:
     needs: plan
     runs-on: ubuntu-latest
-    timeout-minutes: 300
+    # 4 arms x (reads 7 x 2 min + backlog 20 min) plus starts, warm-ups, drains and settles: about
+    # 170 min as calibrated, about 280 min if every drain and settle hits its 2 minute cap.
+    timeout-minutes: 360
     strategy:
       fail-fast: false
       matrix:
@@ -60,8 +62,8 @@ jobs:
       # Inputs go through the environment, never straight into the script.
       - name: Run every cell and arm once
         env:
-          CELLS: ${{ inputs.cells || 'reads:0:800:PT2M:1000,2000,4000,8000,12000,16000,24000,1000;backlog:0:1100,400:PT10M,PT2M' }}  # TEMPORARY calibration ladder
-          ARMS: ${{ inputs.arms || 'current' }}  # TEMPORARY calibration arm
+          CELLS: ${{ inputs.cells || 'reads:0:400:PT2M:1000,2000,3000,4000,6000,8000,1000;backlog:0:1100,400:PT10M,PT10M' }}
+          ARMS: ${{ inputs.arms || 'current,pool1s,readlimit,writes8' }}
           REP: ${{ matrix.rep }}
         run: |
           lscpu | grep -E 'Model name|^CPU\(s\)'

@@ -31,15 +31,20 @@ The owner chooses from the results (ADR 0034).
 2. **Harness.**
    - **Real Kafka.** The benchmark starts a Kafka container next to PostgreSQL and points the application at it, so the relay publishes and the statement consumer runs. The outbox gauges refresh every second in the benchmark (`ledger.outbox.metrics.refresh-ms=1000`).
    - **Mixed load.** The open-model generator (ADR 0032) drives two independent schedules in one step: transfers at a fixed rate and `GET /accounts/{id}` of a random funded account at the step's read rate. Latency, outcome and SLO are recorded per request kind.
-   - **Per second samples**, added to `timeseries.jsonl`: `ledger.outbox.pending`, `ledger.outbox.oldest.pending.age`, the statement consumer's lag (`kafka.consumer.fetch.manager.records.lag.max`), and the existing pool series.
+   - **Per second samples**, added to `timeseries.jsonl`: `ledger.outbox.pending`, `ledger.outbox.oldest.pending.age`, the statement consumer's lag (`consumerLag`), and the existing pool series. The lag is read by the harness from the broker with the Kafka admin client: the sum over the partitions of `ledger.transfers` of the log end offset minus the committed offset of the statement group (`ledger-statement`), that is the events published but not yet in the statement. The application's `kafka.consumer.fetch.manager.records.lag.max` meter was the first choice and was dropped after calibration: it is a maximum over the client's fetches, not a backlog, and read 709,528 where the reconciliation counted 328,797 transfers missing from the statement (see Calibration).
    - **After every step**, besides the ledger checks: the time until the outbox is empty and the statement has every transfer (reconciliation clean), capped at 2 minutes.
 3. **Arms.**
    - `baseline`: the application as it is (write limiter on, 16 slots; pool timeout 30 s).
    - `pool1s`: `spring.datasource.hikari.connection-timeout=1000`.
    - `readlimit`: read limiter with 16 slots and a 100 ms wait.
+   - `writes8`: the write limiter with 8 slots instead of 16, rest as `baseline`. Added after calibration: in the backlog cell the pool had 7 to 8 threads waiting for a connection and the statement consumer applied about 210 events per second while writes ran at about 870 per second, so 16 write slots on a 10 connection pool may starve the relay and the consumer.
+
+   The harness runs `baseline` as the arm `current`, because its phase 7 arm `baseline` means the limiter off.
 4. **Cells.**
-   - `reads`, 0% hot: transfers at 800 req/s (below the lowest phase 7 capacity, 1,200) and a read ladder whose rates the calibration run sets (draft: 2,000, 4,000, 8,000, 16,000), then a recovery probe at the first read rate. Steps of 2 minutes, no early stop.
-   - `backlog`, 0% hot: transfers at 1,100 req/s and no reads for one continuous 10 minute step, read in 2 minute windows, then 2 minutes at 400 req/s to see whether the backlog drains.
+   - `reads`, 0% hot: transfers at 400 req/s and a read ladder of 1,000, 2,000, 3,000, 4,000, 6,000 and 8,000 req/s, then a recovery probe at 1,000. Steps of 2 minutes, no early stop. The draft had transfers at 800 and reads from 2,000 to 16,000; calibration moved both (see Calibration).
+   - `backlog`, 0% hot: transfers at 1,100 req/s and no reads for one continuous 10 minute step, read in 2 minute windows, then 10 minutes at 400 req/s to see whether the backlog drains (the draft had 2 minutes; calibration measured the drain too slow for that).
+
+   Harness syntax: `reads:0:400:PT2M:1000,2000,3000,4000,6000,8000,1000;backlog:0:1100,400:PT10M,PT10M`.
 5. **Design as in phase 7.** One calibration run (1 job) to place the read ladder, then 5 jobs in parallel, each running every cell and arm once in shuffled order on one runner, and an aggregate job. Warm-up, client timeout (5 s), SLO (p99 at most 500 ms and at most 1% errors, per request kind) and ledger checks as in ADR 0030.
 6. **Aggregator** (stdlib Python, `tools/benchmark/pool_bounds.py`): per cell, arm and step, reads and writes side by side (rate offered, served/s, p99, error share by kind: 503, 5xx, timeout); per arm, the paired difference against baseline within each job; for `backlog`, outbox oldest pending age and consumer lag per 2 minute window and the drain time.
 7. **Results** under `docs/benchmarks/<date>-pool-bounds/`, a section in `docs/results.md`, the README line updated, ADR 0034 written from the results with the owner's choice.
@@ -54,6 +59,18 @@ Out of scope: pool size tuning, separate pools per workload, adaptive limiters, 
 4. The relay and the consumer keep their behavior on a pool timeout: the relay logs and retries on the next tick, the consumer retries without limit and dead-letters nothing (existing tests, plus one with a 1 s pool timeout and the pool exhausted).
 5. The benchmark runs with a real broker; `timeseries.jsonl` carries the outbox and consumer series; every step of every arm passes the ledger checks and has no 4xx answers.
 6. The results state, from paired within-job comparisons, where reads break each arm, whether a read flood breaks writes, how far the relay and consumer fall behind at 1,100 req/s and whether they drain.
+
+## Calibration
+
+Run 44171716101, 1 job, arm `current` only, on an AMD EPYC 7763 (4 vCPU), with the draft cells (`reads` at 800 transfers/s with reads from 1,000 to 24,000; `backlog` 10 minutes at 1,100 then 2 minutes at 400).
+
+- With Kafka on, transfers at 800 req/s already got 23% `503` with 1,000 reads/s next to them, so the `reads` cell's write rate drops to 400 req/s, which passed cleanly.
+- Reads broke between 2,000 and 4,000 req/s, so the ladder is 1,000 to 8,000 with more steps in that range.
+- The relay keeps up: the outbox oldest pending age stayed at or below 0.2 s at 1,100 req/s offered.
+- The statement consumer does not. At the end of the 1,100 req/s step the reconciliation counted 328,797 transfers missing from the statement. The consumer applied about 210 events per second while writes ran at about 870 per second, and about 800 per second once writes dropped to 400, so the backlog drained at only about 400 per second net. The drain step is therefore 10 minutes instead of 2.
+- In the same step the pool had 7 to 8 threads waiting for a connection, which is why `writes8` was added.
+- The sampled `kafka.consumer.fetch.manager.records.lag.max` read 709,528 against those 328,797, above the transfers produced in the step, so the lag is now read from the broker (scope 2).
+- The harness's settle check after the drain step failed after 8.8 s: PostgreSQL ran its anti-join over the backlog as a parallel query and ran out of the container's 64 MB of shared memory. The check now runs without parallel workers.
 
 ## Decisions
 

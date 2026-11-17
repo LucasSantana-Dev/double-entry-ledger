@@ -35,6 +35,8 @@ import org.junit.jupiter.api.MethodOrderer;
 import org.junit.jupiter.api.Order;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestMethodOrder;
+import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.testcontainers.kafka.KafkaContainer;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 import org.testcontainers.utility.DockerImageName;
@@ -121,7 +123,9 @@ class BreakingPointBenchmark {
             // Phase 8: "current" is the spec's baseline, the application as it is (write limiter on).
             "current", "",
             "pool1s", "--spring.datasource.hikari.connection-timeout=1000",
-            "readlimit", "--ledger.admission.reads.max-concurrent=16 --ledger.admission.reads.max-wait=PT0.1S");
+            "readlimit", "--ledger.admission.reads.max-concurrent=16 --ledger.admission.reads.max-wait=PT0.1S",
+            // Half the write slots, so writes cannot hold every connection the relay and consumer need.
+            "writes8", "--ledger.admission.max-concurrent=8");
 
     /**
      * One cell and repetition. {@code name} is null for a phase 6 ladder, whose id stays as it
@@ -280,9 +284,11 @@ class BreakingPointBenchmark {
                 KafkaContainer kafka = new KafkaContainer(DockerImageName.parse("apache/kafka:4.2.2"))) {
             db.start();
             List<String> appArgs = new ArrayList<>();
+            Admin admin = null;
             if (KAFKA) {
                 kafka.start();
                 appArgs.addAll(AppProcess.kafkaArgs(kafka.getBootstrapServers()));
+                admin = Admin.create(Map.of(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, kafka.getBootstrapServers()));
             }
             appArgs.addAll(run.appArgs()); // last, so an arm can override
             Path logs = OUT.resolve("logs");
@@ -315,7 +321,7 @@ class BreakingPointBenchmark {
                     double rate = run.rate(index);
                     double readRate = run.readRate(index);
                     LedgerBenchmark.ResourceSampler sampler = LedgerBenchmark.ResourceSampler.start(app);
-                    PoolSampler pool = PoolSampler.start(app);
+                    PoolSampler pool = PoolSampler.start(app, admin);
                     OpenLoad.Mixed step = OpenLoad.runMixed(client, transfers, rate, reads, readRate, run.step(index),
                             TIMEOUT, MAX_IN_FLIGHT);
                     List<PoolSampler.Sample> poolSamples = pool.stop();
@@ -360,6 +366,9 @@ class BreakingPointBenchmark {
                     }
                 }
             } finally {
+                if (admin != null) {
+                    admin.close();
+                }
                 Files.writeString(logs.resolve(prefix + "-postgres.log"), db.getLogs(), StandardCharsets.UTF_8);
             }
         }
@@ -521,6 +530,9 @@ class BreakingPointBenchmark {
         boolean settled = false;
         try (Connection c = DriverManager.getConnection(db.getJdbcUrl(), db.getUsername(), db.getPassword());
                 Statement s = c.createStatement()) {
+            // A parallel hash anti-join over a large backlog runs out of the container's 64 MB of
+            // shared memory (calibration run 44171716101); one process is enough here.
+            s.execute("set max_parallel_workers_per_gather = 0");
             while (app.alive() && Instant.now().isBefore(deadline)) {
                 try (ResultSet rs = s.executeQuery("""
                         select (select count(*) from outbox_events where published_at is null and parked_at is null)
