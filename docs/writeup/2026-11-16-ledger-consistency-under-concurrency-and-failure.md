@@ -10,11 +10,11 @@ This post walks through a small Java project, [double-entry-ledger](../../README
 
 Three classes of bug drive the design.
 
-**Lost updates and double spends.** Two transfers read a balance of 100.00, each subtracts 80.00, each writes 20.00. One debit vanishes. Any read, compute, write sequence on a balance has this race unless something serializes the writers.
+The first is lost updates and double spends. Two transfers read a balance of 100.00, each subtracts 80.00, each writes 20.00. One debit vanishes. Any read, compute, write sequence on a balance has this race unless something serializes the writers.
 
-**Duplicate requests.** A client retries after a lost response. Without idempotency the retry is a second transfer; with a naive check (look up the key, then insert) two concurrent retries both see "not found" and both insert.
+The second is duplicate requests. A client retries after a lost response. Without idempotency the retry is a second transfer; with a naive check (look up the key, then insert) two concurrent retries both see "not found" and both insert.
 
-**Lost or duplicated events.** Writing to PostgreSQL and publishing to Kafka are two commits. Commit the database first and crash, and the event is lost; publish first and roll back, and consumers see a transfer that never happened. Even with that solved, delivery is at least once, so consumers see some events twice.
+The third is lost or duplicated events. Writing to PostgreSQL and publishing to Kafka are two commits. Commit the database first and crash, and the event is lost; publish first and roll back, and consumers see a transfer that never happened. Even with that solved, delivery is at least once, so consumers see some events twice.
 
 ## Phase 1: the ledger and the invariant test
 
@@ -22,7 +22,7 @@ The model is double entry ([ADR 0005](../adr/0005-entries-plus-materialized-bala
 
 Idempotency keys live in PostgreSQL, written in the same transaction as the transfer ([ADR 0006](../adr/0006-idempotency-key-in-postgres.md)). A unique constraint settles the race: while the first request runs, a concurrent retry gets a 409; after it commits, a retry gets the original response.
 
-The test that carries the weight is `ConcurrentTransfersInvariantTest`. It fires a seeded random workload on virtual threads: transfers in both directions between the same accounts, 30% of them touching one hot account, amounts large enough that some must fail for insufficient funds, and 10% of requests sent twice at the same time with the same idempotency key. Then it audits the database directly for seven invariants: balances sum to zero, no customer balance is negative, every balance equals the sum of its entries, every transfer is exactly two cancelling entries, no key produced more than one transfer, every transfer has its key stored, and entries cannot be updated or deleted. Any unexpected exception fails the run, so a single deadlock breaks the build. A client-side model of every transfer reported as created must also match the stored transfers and every final balance.
+Most of the evidence comes from `ConcurrentTransfersInvariantTest`. It fires a seeded random workload on virtual threads: transfers in both directions between the same accounts, 30% of them touching one hot account, amounts large enough that some must fail for insufficient funds, and 10% of requests sent twice at the same time with the same idempotency key. Then it audits the database directly for seven invariants: balances sum to zero, no customer balance is negative, every balance equals the sum of its entries, every transfer is exactly two cancelling entries, no key produced more than one transfer, every transfer has its key stored, and entries cannot be updated or deleted. Any unexpected exception fails the run, so a single deadlock breaks the build. A client-side model of every transfer reported as created must also match the stored transfers and every final balance.
 
 Two recorded runs on 2026-11-13 ([README](../../README.md#what-the-tests-prove)):
 
@@ -37,12 +37,12 @@ The seed fixes the workload. It cannot fix the thread interleaving, so counts mo
 
 Phase 1 used `SELECT ... FOR UPDATE` with locks taken in account id order, which avoids deadlocks by construction ([ADR 0007](../adr/0007-pessimistic-locking-ordered-by-id.md)). It was the easiest version to prove correct. Phase 2 made the strategy selectable and benchmarked four of them ([ADR 0010](../adr/0010-four-concurrency-strategies-and-bounded-retry.md)):
 
-- **pessimistic**: `SELECT ... FOR UPDATE` in id order, then `UPDATE`;
-- **conditional update**: a single `UPDATE ... SET balance = balance - x WHERE id = ? AND balance >= x` per account, in id order, checking the row count;
-- **optimistic**: a version column, retried on conflict;
-- **serializable**: `SERIALIZABLE` isolation, retried on serialization failure.
+- pessimistic: `SELECT ... FOR UPDATE` in id order, then `UPDATE`;
+- conditional update: a single `UPDATE ... SET balance = balance - x WHERE id = ? AND balance >= x` per account, in id order, checking the row count;
+- optimistic: a version column, retried on conflict;
+- serializable: `SERIALIZABLE` isolation, retried on serialization failure.
 
-The two that abort on conflict make at most 5 attempts with backoff and then answer 503 with nothing written, so the client can retry with the same key. All four pass the invariant test, so correctness does not separate them. Throughput and tail latency do.
+The two that abort on conflict make at most 5 attempts with backoff and then answer 503 with nothing written, so the client can retry with the same key. All four pass the invariant test, so the comparison comes down to throughput and tail latency.
 
 The benchmark ran on a GitHub-hosted runner (4 vCPU AMD EPYC 9V45, Java 25): 24 cells, 5 repetitions each in shuffled order, 30 s warm-up and 60 s measured, a fresh PostgreSQL 18 and a fresh application JVM per cell ([ADRs 0012 to 0015](../adr/0012-benchmark-scenarios-and-metrics.md)). Values are medians; "hot" is the share of transfers touching one shared account. Intervals are in [results.md](../benchmarks/2026-11-13/results.md).
 
@@ -59,7 +59,7 @@ The same benchmark compared virtual and platform threads. Virtual threads did no
 
 ## Phase 3: events that survive failures
 
-Every committed transfer becomes a `TransferCommitted` event on the Kafka topic `ledger.transfers`, and an account statement is built from those events in a separate schema. The dual write is removed with a transactional outbox ([ADR 0016](../adr/0016-outbox-polling-relay.md)). The event is a row in `outbox_events`, inserted as the last statement of the transfer transaction, so it commits or rolls back with the transfer. A relay polls every 100 ms, claims rows with `FOR UPDATE SKIP LOCKED`, sends them, waits for each acknowledgement and marks them published. A transaction-scoped PostgreSQL advisory lock keeps one relay active across instances. Polling won over Debezium because it needs no replication slot or Connect worker and keeps each step testable; Debezium remains the scale-out path on the same table.
+Every committed transfer becomes a `TransferCommitted` event on the Kafka topic `ledger.transfers`, and an account statement is built from those events in a separate schema. A transactional outbox removes the dual write ([ADR 0016](../adr/0016-outbox-polling-relay.md)). The event is a row in `outbox_events`, inserted as the last statement of the transfer transaction, so it commits or rolls back with the transfer. A relay polls every 100 ms, claims rows with `FOR UPDATE SKIP LOCKED`, sends them, waits for each acknowledgement and marks them published. A transaction-scoped PostgreSQL advisory lock keeps one relay active across instances. Polling won over Debezium because it needs no replication slot or Connect worker and keeps each step testable; Debezium remains the scale-out path on the same table.
 
 Delivery is at least once, so the consumer deduplicates ([ADR 0017](../adr/0017-statement-projection-and-reconciliation.md)). It inserts the event id into `processed_events` in the same transaction as the statement lines; a conflict means the event was already applied and the transaction does nothing else. Kafka transactions would not remove this table, since the PostgreSQL write would still commit separately. Statement lines are ordered by the ledger sequence the event carries, so redeliveries and partition interleaving cannot reorder an account's history.
 
@@ -67,10 +67,10 @@ A reconciliation compares the ledger with the statement every minute; events sti
 
 `FaultInjectionTest` breaks things for real ([ADR 0019](../adr/0019-fault-injection.md)):
 
-- **broker down**: the Kafka container is paused through the Docker API;
-- **database connection cut between the send and the mark-published update**: PostgreSQL is reached only through Toxiproxy, and a hook disables the proxy right after Kafka acknowledged the batch, so the driver sees a real I/O failure;
-- **consumer crash between its commit and the offset commit**: a hook throws after the statement transaction, so the record is redelivered;
-- **duplicate delivery**: published rows are set back to pending and sent again.
+- Broker down: the Kafka container is paused through the Docker API;
+- Database connection cut between the send and the mark-published update: PostgreSQL is reached only through Toxiproxy, and a hook disables the proxy right after Kafka acknowledged the batch, so the driver sees a real I/O failure;
+- Consumer crash between its commit and the offset commit: a hook throws after the statement transaction, so the record is redelivered;
+- Duplicate delivery: published rows are set back to pending and sent again.
 
 After each fault the test asserts that every event was published, the statement applied each one exactly once, reconciliation reports zero differences, and statement balances equal ledger balances. The invariant test checks the same five event properties for all four strategies, including that each account's statement follows commit order, compared against the commit timestamps PostgreSQL records.
 
@@ -78,7 +78,7 @@ Phase 3 took `./mvnw verify` from 1 min 40 s to 3 min 27 s locally (55 to 69 tes
 
 ## Phase 4: one trace through the outbox
 
-Asynchronous systems usually lose the trace at the queue. Here the relay sends an event long after the request that wrote it has finished, on a scheduler thread. Phase 4 carries the context across that gap ([ADR 0021](../adr/0021-tracing-micrometer-otel-and-outbox-traceparent.md)): the transfer transaction stores the current span's W3C `traceparent` in the outbox row, and the relay opens its send span with that stored context as the parent. Kafka observation then puts a `traceparent` header on the record, and the consumer span becomes its child. A row without a context, for example one written while the request was not sampled, gets a new root span and is published anyway.
+Asynchronous systems usually lose the trace at the queue, and here the relay sends an event on a scheduler thread, long after the request that wrote it has finished. Phase 4 carries the context across that gap ([ADR 0021](../adr/0021-tracing-micrometer-otel-and-outbox-traceparent.md)): the transfer transaction stores the current span's W3C `traceparent` in the outbox row, and the relay opens its send span with that stored context as the parent. Kafka observation then puts a `traceparent` header on the record, and the consumer span becomes its child. A row without a context, for example one written while the request was not sampled, gets a new root span and is published anyway.
 
 `TracingTest` captures spans in process from the real OpenTelemetry SDK that Spring Boot configures. One transfer must give one trace id with the HTTP server span as root, JDBC spans below it, the `outbox relay` span whose parent is the stored context, the Kafka producer span under it and the consumer span under that. It also checks the header on the actual record, and that an unsampled transfer or a row with a null `traceparent` is still published and applied.
 
