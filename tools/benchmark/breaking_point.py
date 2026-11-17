@@ -31,7 +31,7 @@ def capacity(steps):
     last_pass = 0.0
     missed = False
     for step in steps:
-        if step["sloPass"]:
+        if step["sloPass"] and step["appAlive"]:
             last_pass = step["offeredRps"]
         else:
             missed = True
@@ -117,6 +117,8 @@ def markdown(summary, run):
         short = s["repetitions"] - s["sloMissedInRepetitions"]
         if short:
             cap = f">= {cap} (ladder too short in {short} repetitions)"
+        if s.get("incompleteRepetitions"):
+            cap += f" ({s['incompleteRepetitions']} repetitions missing)"
         hard = ", ".join(f"{num(h['offeredRps'])} req/s ({h['exit']}, rep {h['repetition']})"
                          for h in s["hardFailures"]) or "none"
         ledger = "all passed" if s["ledgerAlwaysOk"] else "FAILED"
@@ -158,6 +160,9 @@ def main(directory):
     rows = [json.loads(line) for line in text.splitlines() if line.strip()]
     run = json.loads((directory / "run.json").read_text(encoding="utf-8"))
     summary = summarize(rows)
+    for cell in summary.values():
+        # A repetition with no rows at all crashed before its first step.
+        cell["incompleteRepetitions"] = max(0, run.get("repetitions", 0) - cell["repetitions"])
     (directory / "summary.json").write_text(json.dumps({"run": run, "cells": summary}, indent=2) + "\n",
                                             encoding="utf-8")
     (directory / "results.md").write_text(markdown(summary, run), encoding="utf-8")
