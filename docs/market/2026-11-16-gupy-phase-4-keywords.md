@@ -4,7 +4,7 @@ Evidence for the phase 4 ADRs (observability and deployment). Reproduce with `py
 
 ## Method
 
-Same source and filter as the phase 3 sample: the public search endpoint of portal.gupy.io, `api/job-search/jobs?jobName=java`, fetched on 2026-11-16, keeping the postings whose title contains the word "Java": 100 postings from 47 companies. Case-insensitive regular expression matches in title plus description (HTML stripped); the patterns are in the script.
+The source and filter are the same as for the phase 3 sample: the public search endpoint of portal.gupy.io, `api/job-search/jobs?jobName=java`, fetched on 2026-11-16, keeping the postings whose title contains the word "Java". That gives 100 postings from 47 companies. Keywords are case-insensitive regular expressions matched against the title plus the description (HTML stripped); the patterns are in the script.
 
 ## Results
 
@@ -39,7 +39,7 @@ Same source and filter as the phase 3 sample: the public search endpoint of port
 
 ## Caveats
 
-- n = 100 from one portal on one day. Counts of 0 to 5 are noise: they say a term is rare, not that it is absent from the market.
+- n = 100 from one portal on one day. Counts of 0 to 5 are noise: they show that a term is rare, and a 0 does not mean the market never asks for it.
 - A keyword match does not separate required skills from nice-to-haves.
 - "observability or monitoring" matches any sense of the words, including infrastructure monitoring duties.
 - "pipelines" also matches data pipelines, so the CI/CD row is an upper bound.
