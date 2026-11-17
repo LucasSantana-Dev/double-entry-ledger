@@ -4,7 +4,7 @@ name: Breaking point
 # and from the phase 2 benchmark workflow. The fallbacks after || are the input defaults, for a
 # run started without inputs.
 on:
-  # TEMPORARY calibration trigger: a workflow_dispatch workflow only becomes dispatchable once it is
+  # TEMPORARY trigger for the calibration and published runs: a workflow_dispatch workflow only becomes dispatchable once it is
   # on the default branch. Reverted before review.
   push:
     branches: [feat/breaking-point]
@@ -61,13 +61,13 @@ jobs:
       # Inputs go through the environment, never straight into the script.
       - name: Climb the ladder
         env:
-          REPETITIONS: ${{ inputs.repetitions || 1 }}
+          REPETITIONS: ${{ inputs.repetitions || 5 }}
           HOT_SHARES: ${{ inputs.hot_shares || '0,0.9' }}
           RATES: ${{ inputs.rates || '250,500,1000,1500,2000,3000,4000' }}
-          RATES_HOT00: ${{ inputs.rates_hot00 || '250,500,1000,1500,2000,2500,3000,4000' }}
-          RATES_HOT90: ${{ inputs.rates_hot90 || '250,500,750,1000,1500,2000' }}
+          RATES_HOT00: ${{ inputs.rates_hot00 || '1000,1100,1200,1300,1400,1500' }}
+          RATES_HOT90: ${{ inputs.rates_hot90 || '500,550,600,650,700,750' }}
           STEP: ${{ inputs.step || 'PT2M' }}
-          STOP_AFTER_FAILURES: ${{ format('{0}', inputs.stop_after_failures) || '0' }}  # format keeps an input of 0
+          STOP_AFTER_FAILURES: ${{ format('{0}', inputs.stop_after_failures) || '2' }}  # format keeps an input of 0
           TIMEOUT: ${{ inputs.timeout || 'PT5S' }}
         run: |
           args=(
