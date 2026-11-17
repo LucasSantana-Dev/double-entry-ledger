@@ -1,0 +1,98 @@
+name: Pool bounds
+
+# Manual only (spec docs/specs/2026-11-18-pool-bounds). Each job is one repetition with every
+# cell and arm, so comparisons inside a job share the runner's CPU; the aggregate job merges the
+# jobs. reps=1 is the calibration run that places the read ladder. Every run gets a Kafka broker
+# (-Dledger.bench.kafka=true). The arm "current" is the spec's baseline: the application as it is,
+# write limiter on. The fallbacks after || are the input defaults, for a run started without
+# inputs.
+on:
+  workflow_dispatch:
+    inputs:
+      cells:
+        description: Cells, name:hotShare:writeRates[:stepDurations[:readRates]] separated by ;
+        type: string
+        default: 'reads:0:800:PT2M:2000,4000,8000,16000,2000;backlog:0:1100,400:PT10M,PT2M'
+      arms:
+        description: Comma-separated arms (current, pool1s, readlimit)
+        type: string
+        default: 'current,pool1s,readlimit'
+      reps:
+        description: Number of jobs, one repetition each (1 for the calibration run, 5 for the experiment)
+        type: choice
+        options: ['5', '1']
+        default: '5'
+
+permissions:
+  contents: read
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      reps: ${{ steps.reps.outputs.reps }}
+    steps:
+      - id: reps
+        env:
+          REPS: ${{ inputs.reps || '5' }}
+        run: |
+          if [ "$REPS" = "1" ]; then echo 'reps=[1]' >> "$GITHUB_OUTPUT"; else echo 'reps=[1,2,3,4,5]' >> "$GITHUB_OUTPUT"; fi
+
+  repetition:
+    needs: plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    strategy:
+      fail-fast: false
+      matrix:
+        rep: ${{ fromJSON(needs.plan.outputs.reps) }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: maven
+      # Inputs go through the environment, never straight into the script.
+      - name: Run every cell and arm once
+        env:
+          CELLS: ${{ inputs.cells || 'reads:0:800:PT2M:2000,4000,8000,16000,2000;backlog:0:1100,400:PT10M,PT2M' }}
+          ARMS: ${{ inputs.arms || 'current,pool1s,readlimit' }}
+          REP: ${{ matrix.rep }}
+        run: |
+          lscpu | grep -E 'Model name|^CPU\(s\)'
+          ./mvnw -B -Pbenchmark verify \
+            "-Dledger.bench.include=**/BreakingPointBenchmark.java" \
+            "-Dledger.bench.cells=$CELLS" \
+            "-Dledger.bench.arms=$ARMS" \
+            "-Dledger.bench.step=PT2M" \
+            "-Dledger.bench.kafka=true" \
+            "-Dledger.bench.repetitions=1" \
+            "-Dledger.bench.repetition-offset=$((REP - 1))" \
+            "-Dledger.bench.stop-after-failures=0"
+      - name: Keep the repetition
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pool-bounds-rep-${{ matrix.rep }}
+          path: target/benchmark/
+          if-no-files-found: warn
+
+  aggregate:
+    needs: repetition
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: pool-bounds-rep-*
+          path: reps
+      - name: Aggregate
+        run: |
+          python3 tools/benchmark/pool_bounds.py out reps/*
+          cat out/results.md >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pool-bounds-${{ github.run_id }}
+          path: out/
