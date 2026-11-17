@@ -1,0 +1,240 @@
+{
+  "run": {
+    "startedAt": "2026-11-17T00:47:24.728744398Z",
+    "githubRunId": "43990396247",
+    "cpu": "AMD EPYC 9V45 96-Core Processor",
+    "logicalCpus": 4,
+    "os": "Linux 7.0.0-1019-azure",
+    "java": "25.0.5+8-LTS",
+    "grid": "strategy",
+    "cellFilter": "strategy-conditional-update",
+    "repetitions": 5,
+    "plannedCells": 15,
+    "warmup": "PT30S",
+    "measure": "PT1M",
+    "seed": 20261113,
+    "appJvmArgs": "-XX:+UseSerialGC -Xmx460m -XX:MaxMetaspaceSize=192m",
+    "appCpus": "0,1"
+  },
+  "cells": {
+    "strategy-conditional-update-hot00-u256-virtual": {
+      "grid": "strategy",
+      "strategy": "conditional-update",
+      "hotShare": 0.0,
+      "users": 256,
+      "threads": "virtual",
+      "repetitions": 5,
+      "createdPerSecond": {
+        "median": 1861.13,
+        "ciLow": 1802.17,
+        "ciHigh": 1903.7
+      },
+      "p50Ms": {
+        "median": 134,
+        "ciLow": 132,
+        "ciHigh": 137
+      },
+      "p95Ms": {
+        "median": 286,
+        "ciLow": 277,
+        "ciHigh": 300
+      },
+      "p99Ms": {
+        "median": 420,
+        "ciLow": 398,
+        "ciHigh": 444
+      },
+      "allP50Ms": {
+        "median": 134,
+        "ciLow": 132,
+        "ciHigh": 137
+      },
+      "allP99Ms": {
+        "median": 420,
+        "ciLow": 398,
+        "ciHigh": 444
+      },
+      "retries": {
+        "median": 0,
+        "ciLow": 0,
+        "ciHigh": 0
+      },
+      "unavailable503": {
+        "median": 0,
+        "ciLow": 0,
+        "ciHigh": 0
+      },
+      "deadlocks": {
+        "median": 0,
+        "ciLow": 0,
+        "ciHigh": 0
+      },
+      "peakPlatformThreads": {
+        "median": 26,
+        "ciLow": 26,
+        "ciHigh": 26
+      },
+      "peakHeapMb": {
+        "median": 181,
+        "ciLow": 178,
+        "ciHigh": 188
+      },
+      "meanAppCpu": {
+        "median": 0.49,
+        "ciLow": 0.49,
+        "ciHigh": 0.49
+      },
+      "meanLoadGeneratorCpu": {
+        "median": 0.06,
+        "ciLow": 0.06,
+        "ciHigh": 0.06
+      }
+    },
+    "strategy-conditional-update-hot30-u256-virtual": {
+      "grid": "strategy",
+      "strategy": "conditional-update",
+      "hotShare": 0.3,
+      "users": 256,
+      "threads": "virtual",
+      "repetitions": 5,
+      "createdPerSecond": {
+        "median": 1383.91,
+        "ciLow": 1316.47,
+        "ciHigh": 1388.21
+      },
+      "p50Ms": {
+        "median": 171,
+        "ciLow": 170,
+        "ciHigh": 184
+      },
+      "p95Ms": {
+        "median": 320,
+        "ciLow": 317,
+        "ciHigh": 349
+      },
+      "p99Ms": {
+        "median": 475,
+        "ciLow": 469,
+        "ciHigh": 500
+      },
+      "allP50Ms": {
+        "median": 171,
+        "ciLow": 170,
+        "ciHigh": 184
+      },
+      "allP99Ms": {
+        "median": 475,
+        "ciLow": 469,
+        "ciHigh": 500
+      },
+      "retries": {
+        "median": 0,
+        "ciLow": 0,
+        "ciHigh": 0
+      },
+      "unavailable503": {
+        "median": 0,
+        "ciLow": 0,
+        "ciHigh": 0
+      },
+      "deadlocks": {
+        "median": 0,
+        "ciLow": 0,
+        "ciHigh": 0
+      },
+      "peakPlatformThreads": {
+        "median": 26,
+        "ciLow": 26,
+        "ciHigh": 26
+      },
+      "peakHeapMb": {
+        "median": 169,
+        "ciLow": 166,
+        "ciHigh": 178
+      },
+      "meanAppCpu": {
+        "median": 0.44,
+        "ciLow": 0.43,
+        "ciHigh": 0.44
+      },
+      "meanLoadGeneratorCpu": {
+        "median": 0.05,
+        "ciLow": 0.04,
+        "ciHigh": 0.05
+      }
+    },
+    "strategy-conditional-update-hot90-u256-virtual": {
+      "grid": "strategy",
+      "strategy": "conditional-update",
+      "hotShare": 0.9,
+      "users": 256,
+      "threads": "virtual",
+      "repetitions": 5,
+      "createdPerSecond": {
+        "median": 698.97,
+        "ciLow": 644.72,
+        "ciHigh": 706.35
+      },
+      "p50Ms": {
+        "median": 299,
+        "ciLow": 295,
+        "ciHigh": 356
+      },
+      "p95Ms": {
+        "median": 548,
+        "ciLow": 540,
+        "ciHigh": 562
+      },
+      "p99Ms": {
+        "median": 889,
+        "ciLow": 764,
+        "ciHigh": 943
+      },
+      "allP50Ms": {
+        "median": 299,
+        "ciLow": 295,
+        "ciHigh": 356
+      },
+      "allP99Ms": {
+        "median": 889,
+        "ciLow": 764,
+        "ciHigh": 943
+      },
+      "retries": {
+        "median": 0,
+        "ciLow": 0,
+        "ciHigh": 0
+      },
+      "unavailable503": {
+        "median": 0,
+        "ciLow": 0,
+        "ciHigh": 0
+      },
+      "deadlocks": {
+        "median": 0,
+        "ciLow": 0,
+        "ciHigh": 0
+      },
+      "peakPlatformThreads": {
+        "median": 26,
+        "ciLow": 26,
+        "ciHigh": 26
+      },
+      "peakHeapMb": {
+        "median": 155,
+        "ciLow": 155,
+        "ciHigh": 159
+      },
+      "meanAppCpu": {
+        "median": 0.31,
+        "ciLow": 0.31,
+        "ciHigh": 0.31
+      },
+      "meanLoadGeneratorCpu": {
+        "median": 0.03,
+        "ciLow": 0.02,
+        "ciHigh": 0.04
+      }
+    }
+  }
+}
