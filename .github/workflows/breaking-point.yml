@@ -62,9 +62,9 @@ jobs:
       - name: Climb the ladder
         env:
           REPETITIONS: ${{ inputs.repetitions || 5 }}
-          HOT_SHARES: ${{ inputs.hot_shares || '0,0.9' }}
+          HOT_SHARES: ${{ inputs.hot_shares || '0' }}
           RATES: ${{ inputs.rates || '250,500,1000,1500,2000,3000,4000' }}
-          RATES_HOT00: ${{ inputs.rates_hot00 || '1000,1100,1200,1300,1400,1500' }}
+          RATES_HOT00: ${{ inputs.rates_hot00 || '1500,1750,2000,2250,2500,2750,3000' }}
           RATES_HOT90: ${{ inputs.rates_hot90 || '500,550,600,650,700,750' }}
           STEP: ${{ inputs.step || 'PT2M' }}
           STOP_AFTER_FAILURES: ${{ format('{0}', inputs.stop_after_failures) || '2' }}  # format keeps an input of 0
