@@ -1,0 +1,17 @@
+# Override for the footprint tool (phase 5, ADR 0027): the stack of compose.yaml without the
+# observability container, on a port that does not clash with a running local stack.
+#   docker compose -f compose.yaml -f tools/footprint/compose.footprint.yaml up -d ledger
+services:
+  ledger:
+    ports: !override
+      - "${FOOTPRINT_PORT:-18080}:8080"
+    environment:
+      # No collector runs here, so nothing is exported over OTLP.
+      MANAGEMENT_TRACING_EXPORT_OTLP_ENABLED: "false"
+      MANAGEMENT_OTLP_METRICS_EXPORT_ENABLED: "false"
+      MANAGEMENT_TRACING_SAMPLING_PROBABILITY: "0.1"
+    depends_on: !override
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
