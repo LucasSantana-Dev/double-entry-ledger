@@ -5,11 +5,6 @@ name: Admission control
 # merges the jobs. The fallbacks after || are the input defaults, for a run started without
 # inputs.
 on:
-  # TEMPORARY trigger for the run on this branch: a workflow_dispatch workflow only becomes
-  # dispatchable once it is on the default branch. Removed before review.
-  push:
-    branches: [feat/admission-control]
-    paths: [.github/workflows/admission-control.yml]
   workflow_dispatch:
     inputs:
       cells:

@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: done
 date: 2026-11-17
 phase: 7
 tags: [benchmark, capacity, overload, admission-control, metastability]
@@ -46,7 +46,7 @@ As in phase 6 (ADR 0030), plus:
 
 ## Acceptance criteria
 
-1. With `ledger.admission.max-concurrent` unset the application behaves exactly as before: the phase 1 to 5 tests pass unchanged.
+1. With `ledger.admission.max-concurrent` at 0 the application behaves exactly as before, and the phase 1 to 5 tests pass unchanged with the limiter on (its default since ADR 0033).
 2. A test shows the limiter answers `503` with `Retry-After` and the `overloaded` problem type once its slots are taken, and admits requests again once a slot frees.
 3. The run writes `timeseries.jsonl` and per-cell PostgreSQL and GC logs; the aggregator reads them.
 4. Every step of every arm passes the ledger checks and has no 4xx answers.
@@ -56,7 +56,7 @@ As in phase 6 (ADR 0030), plus:
 
 | Question | Decision | Record |
 |---|---|---|
-| Admission mechanism (none, pool timeout, limiter, both) and its settings | Owner's choice from this phase's data | ADR 0033 (after the run) |
+| Admission mechanism (none, pool timeout, limiter, both) and its settings | Limiter, 16 slots, 100 ms wait, on by default; chosen by the owner on 2026-11-17 | [ADR 0033](../../adr/0033-admission-control-limiter.md) |
 
 The arms, cells and settings above are the experiment's design, not a product decision: they only exist to produce the data ADR 0033 needs.
 

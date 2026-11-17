@@ -37,16 +37,22 @@ final class AppProcess implements AutoCloseable {
     private final HttpClient http = HttpClient.newHttpClient();
     final String baseUrl;
 
+    /** Switches the admission filter off; the application turns it on by default (ADR 0033). */
+    static final String ADMISSION_OFF = "--ledger.admission.max-concurrent=0";
+
     private AppProcess(Process process, Path log, int port) {
         this.process = process;
         this.log = log;
         this.baseUrl = "http://localhost:" + port;
     }
 
-    /** Starts the jar with the cell's settings and waits until it reports healthy. */
+    /**
+     * Starts the jar with the cell's settings and waits until it reports healthy. Admission control
+     * (ADR 0033) stays off, so the phase 2 to 5 numbers remain comparable with the published ones.
+     */
     static AppProcess start(Path jar, Cell cell, String jdbcUrl, String user, String password, Path log)
             throws IOException, InterruptedException {
-        return start(jar, cell, jdbcUrl, user, password, log, List.of(), List.of());
+        return start(jar, cell, jdbcUrl, user, password, log, List.of(), List.of(ADMISSION_OFF));
     }
 
     /**

@@ -85,8 +85,8 @@ class BreakingPointBenchmark {
             Arrays.stream(System.getProperty("ledger.bench.arms", "baseline").split(",")).map(String::trim).toList();
     /** Application arguments per arm, overridable with {@code ledger.bench.arm.<name>}. */
     private static final Map<String, String> ARM_ARGS = Map.of(
-            "baseline", "",
-            "hikari", "--spring.datasource.hikari.connection-timeout=1000",
+            "baseline", AppProcess.ADMISSION_OFF,
+            "hikari", AppProcess.ADMISSION_OFF + " --spring.datasource.hikari.connection-timeout=1000",
             "limiter", "--ledger.admission.max-concurrent=16 --ledger.admission.max-wait=PT0.1S");
 
     /**
