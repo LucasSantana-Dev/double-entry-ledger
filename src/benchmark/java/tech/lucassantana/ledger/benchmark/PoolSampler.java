@@ -8,15 +8,21 @@ import java.util.Map;
 /**
  * Samples the application's database pool and request queue once a second during a step (spec
  * {@code docs/specs/2026-11-17-admission-control}, scope 1): threads waiting for a connection,
- * the mean connection acquire time since the last answered read, and requests in progress. The
- * three reads go out together and the sample is stamped when they finished; a read the swamped
+ * the mean connection acquire time since the last answered read, and requests in progress. Phase
+ * 8 (spec {@code docs/specs/2026-11-18-pool-bounds}) adds the outbox backlog, the age of its
+ * oldest row and the statement consumer's lag; without a broker these read 0 or null. The reads
+ * go out together and the sample is stamped when they finished; a read the swamped
  * server does not answer within a second is recorded as missing (null).
  */
 final class PoolSampler {
 
     /** One second of a step; a field is null when the application did not answer in time. */
-    record Sample(double secondsIntoStep, Double pending, Double acquireMeanMs, Double active) {
+    record Sample(double secondsIntoStep, Double pending, Double acquireMeanMs, Double active, Double outboxPending,
+            Double outboxOldestAgeSeconds, Double consumerLag) {
     }
+
+    /** Statement consumer lag: the largest records lag of the listener's consumer (spec 2026-11-18-pool-bounds). */
+    static final String CONSUMER_LAG = "kafka.consumer.fetch.manager.records.lag.max";
 
     private static final Duration POLL_TIMEOUT = Duration.ofSeconds(1);
 
@@ -53,6 +59,12 @@ final class PoolSampler {
                     () -> value("http.server.requests.active", "ACTIVE_TASKS"), Thread::startVirtualThread);
             var acquireRead = java.util.concurrent.CompletableFuture.supplyAsync(
                     () -> read("hikaricp.connections.acquire"), Thread::startVirtualThread);
+            var outboxRead = java.util.concurrent.CompletableFuture.supplyAsync(
+                    () -> value("ledger.outbox.pending", "VALUE"), Thread::startVirtualThread);
+            var ageRead = java.util.concurrent.CompletableFuture.supplyAsync(
+                    () -> value("ledger.outbox.oldest.pending.age", "VALUE"), Thread::startVirtualThread);
+            var lagRead = java.util.concurrent.CompletableFuture.supplyAsync(
+                    () -> value(CONSUMER_LAG, "VALUE"), Thread::startVirtualThread);
             Double pending = pendingRead.join();
             Double active = activeRead.join();
             Map<String, Double> acquire = acquireRead.join();
@@ -69,7 +81,8 @@ final class PoolSampler {
                 lastCount = count;
                 lastTotal = total;
             }
-            samples.add(new Sample(Math.round(at * 10) / 10.0, pending, acquireMean, active));
+            samples.add(new Sample(Math.round(at * 10) / 10.0, pending, acquireMean, active, outboxRead.join(),
+                    ageRead.join(), lagRead.join()));
             long sleep = next - System.nanoTime();
             if (sleep > 0) {
                 try {

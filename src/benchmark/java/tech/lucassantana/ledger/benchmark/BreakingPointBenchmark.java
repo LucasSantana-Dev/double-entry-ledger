@@ -12,7 +12,11 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.Statement;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -31,6 +35,7 @@ import org.junit.jupiter.api.MethodOrderer;
 import org.junit.jupiter.api.Order;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestMethodOrder;
+import org.testcontainers.kafka.KafkaContainer;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 import org.testcontainers.utility.DockerImageName;
 
@@ -51,6 +56,27 @@ import org.testcontainers.utility.DockerImageName;
  *        -Dledger.bench.hot-shares=0 -Dledger.bench.rates=100,200 -Dledger.bench.step=PT10S \
  *        -Dledger.bench.warmup=PT5S       # a quick smoke run
  * </pre>
+ *
+ * <p>Phase 7 and 8 cells ({@code ledger.bench.cells}, separated by {@code ;}) read
+ * {@code name:hotShare:writeRates[:stepDurations[:readRates]]}, each part a comma-separated list
+ * with one entry per step; a list of one entry applies to every step, and an empty duration list
+ * means {@code ledger.bench.step}. A cell with read rates (phase 8, spec
+ * {@code docs/specs/2026-11-18-pool-bounds}) runs two independent open-model schedules per step,
+ * transfers at the write rate and {@code GET /accounts/{id}} of a random funded account at the
+ * read rate, and reports latency, outcome and SLO per kind. Examples:
+ *
+ * <pre>
+ * reads:0:800:PT2M:2000,4000,8000,16000,2000   five 2 minute steps, writes at 800, a read ladder
+ * backlog:0:1100,400:PT10M,PT2M                10 minutes at 1,100 then 2 minutes at 400, no reads
+ * </pre>
+ *
+ * <p>With {@code -Dledger.bench.kafka=true} (phase 8) every run also gets a Kafka container, so
+ * the outbox relay publishes and the statement consumer runs, and the time series carries the
+ * outbox and consumer series. The harness then waits after a cell's last step, and after every
+ * step that had reads, until the outbox is empty and every transfer is in the statement (at most
+ * 2 minutes), and records how long that took. Write-only steps of a cell run back to back, so a
+ * backlog carries into the next step: that is what the {@code backlog} cell measures. Without the
+ * flag nothing changes for the phase 6 and 7 runs.
  */
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class BreakingPointBenchmark {
@@ -81,19 +107,48 @@ class BreakingPointBenchmark {
      * hot share.
      */
     private static final String CELLS = System.getProperty("ledger.bench.cells", "");
+    /** Phase 8: a Kafka broker next to PostgreSQL in every run. Off for the phase 6 and 7 runs. */
+    private static final boolean KAFKA = Boolean.getBoolean("ledger.bench.kafka");
+    private static final Duration SETTLE_CAP = Duration.ofMinutes(2);
     private static final List<String> ARMS =
             Arrays.stream(System.getProperty("ledger.bench.arms", "baseline").split(",")).map(String::trim).toList();
     /** Application arguments per arm, overridable with {@code ledger.bench.arm.<name>}. */
     private static final Map<String, String> ARM_ARGS = Map.of(
+            // Phase 7: "baseline" is the limiter off, as the application was before ADR 0033.
             "baseline", AppProcess.ADMISSION_OFF,
             "hikari", AppProcess.ADMISSION_OFF + " --spring.datasource.hikari.connection-timeout=1000",
-            "limiter", "--ledger.admission.max-concurrent=16 --ledger.admission.max-wait=PT0.1S");
+            "limiter", "--ledger.admission.max-concurrent=16 --ledger.admission.max-wait=PT0.1S",
+            // Phase 8: "current" is the spec's baseline, the application as it is (write limiter on).
+            "current", "",
+            "pool1s", "--spring.datasource.hikari.connection-timeout=1000",
+            "readlimit", "--ledger.admission.reads.max-concurrent=16 --ledger.admission.reads.max-wait=PT0.1S");
 
     /**
      * One cell and repetition. {@code name} is null for a phase 6 ladder, whose id stays as it
      * was so the phase 6 aggregator still reads it.
      */
-    private record Run(String name, double hotShare, String arm, List<Double> rates, Duration step, int repetition) {
+    private record Run(String name, double hotShare, String arm, List<Double> rates, List<Duration> steps,
+            List<Double> readRates, int repetition) {
+
+        int stepCount() {
+            return Math.max(rates.size(), Math.max(steps.size(), readRates.size()));
+        }
+
+        double rate(int index) {
+            return rates.size() == 1 ? rates.getFirst() : rates.get(index);
+        }
+
+        Duration step(int index) {
+            return steps.size() == 1 ? steps.getFirst() : steps.get(index);
+        }
+
+        double readRate(int index) {
+            return readRates.isEmpty() ? 0 : readRates.size() == 1 ? readRates.getFirst() : readRates.get(index);
+        }
+
+        boolean hasReads() {
+            return readRates.stream().anyMatch(r -> r > 0);
+        }
 
         String cellId() {
             String base = "%s-hot%02d".formatted(STRATEGY, Math.round(hotShare * 100));
@@ -160,15 +215,24 @@ class BreakingPointBenchmark {
                 for (double hot : HOT_SHARES) {
                     List<Double> rates = doubles(System.getProperty(
                             "ledger.bench.rates.hot%02d".formatted(Math.round(hot * 100)), RATES));
-                    runs.add(new Run(null, hot, "baseline", rates, STEP, repetition));
+                    runs.add(new Run(null, hot, "baseline", rates, List.of(STEP), List.of(), repetition));
                 }
             } else {
                 for (String spec : CELLS.split(";")) {
-                    String[] parts = spec.trim().split(":");
+                    String[] parts = spec.trim().split(":", -1);
+                    List<Duration> steps = parts.length > 3 && !parts[3].isBlank()
+                            ? Arrays.stream(parts[3].split(",")).map(String::trim).map(Duration::parse).toList()
+                            : List.of(STEP);
+                    List<Double> reads = parts.length > 4 ? doubles(parts[4]) : List.of();
                     for (String arm : ARMS) {
-                        Duration step = parts.length > 3 ? Duration.parse(parts[3]) : STEP;
-                        runs.add(new Run(parts[0], Double.parseDouble(parts[1]), arm, doubles(parts[2]), step,
-                                repetition));
+                        Run run = new Run(parts[0], Double.parseDouble(parts[1]), arm, doubles(parts[2]), steps,
+                                reads, repetition);
+                        for (List<?> list : List.of(run.rates(), run.steps(), run.readRates())) {
+                            if (list.size() > 1 && list.size() != run.stepCount()) {
+                                throw new IllegalArgumentException("cell " + spec + ": lists of different lengths");
+                            }
+                        }
+                        runs.add(run);
                     }
                 }
             }
@@ -212,8 +276,15 @@ class BreakingPointBenchmark {
         // (spec 2026-11-17-admission-control, scope 1).
         try (PostgreSQLContainer db = new PostgreSQLContainer(DockerImageName.parse("postgres:18-alpine"))
                 .withCommand("postgres", "-c", "fsync=off", "-c", "log_checkpoints=on",
-                        "-c", "log_autovacuum_min_duration=0", "-c", "log_lock_waits=on")) {
+                        "-c", "log_autovacuum_min_duration=0", "-c", "log_lock_waits=on");
+                KafkaContainer kafka = new KafkaContainer(DockerImageName.parse("apache/kafka:4.2.2"))) {
             db.start();
+            List<String> appArgs = new ArrayList<>();
+            if (KAFKA) {
+                kafka.start();
+                appArgs.addAll(AppProcess.kafkaArgs(kafka.getBootstrapServers()));
+            }
+            appArgs.addAll(run.appArgs()); // last, so an arm can override
             Path logs = OUT.resolve("logs");
             String prefix = run.cellId() + "-rep" + run.repetition();
             Path log = logs.resolve(prefix + ".log");
@@ -221,32 +292,42 @@ class BreakingPointBenchmark {
             List<String> gcLog = List.of("-Xlog:gc:file=\"" + logs.resolve(prefix + "-gc.log").toAbsolutePath()
                     + "\":utctime,uptime,level");
             try (AppProcess app = AppProcess.start(JAR, cell, db.getJdbcUrl(), db.getUsername(), db.getPassword(), log,
-                    gcLog, run.appArgs());
+                    gcLog, appArgs);
                     HttpClient client = HttpClient.newBuilder()
                             .version(HttpClient.Version.HTTP_1_1)
                             .connectTimeout(TIMEOUT)
                             .build()) {
                 List<String> accounts = LedgerBenchmark.seed(app);
                 Supplier<HttpRequest.Builder> transfers = transfers(app, accounts, run.hotShare());
+                Supplier<HttpRequest.Builder> reads = reads(app, accounts);
 
-                OpenLoad.run(client, transfers, WARMUP_RATE, WARMUP, TIMEOUT, MAX_IN_FLIGHT); // discarded
+                // Discarded; reads are warmed too when the cell has them.
+                OpenLoad.runMixed(client, transfers, WARMUP_RATE, reads, run.hasReads() ? WARMUP_RATE : 0, WARMUP,
+                        TIMEOUT, MAX_IN_FLIGHT);
                 requireDrainMetrics(app);
                 drain(app);
+                if (KAFKA) {
+                    settle(db, app);
+                }
 
-                List<Double> rates = run.rates();
                 int failuresInARow = 0;
-                for (int index = 0; index < rates.size(); index++) {
-                    double rate = rates.get(index);
+                for (int index = 0; index < run.stepCount(); index++) {
+                    double rate = run.rate(index);
+                    double readRate = run.readRate(index);
                     LedgerBenchmark.ResourceSampler sampler = LedgerBenchmark.ResourceSampler.start(app);
                     PoolSampler pool = PoolSampler.start(app);
-                    OpenLoad.Step step = OpenLoad.run(client, transfers, rate, run.step(), TIMEOUT, MAX_IN_FLIGHT);
+                    OpenLoad.Mixed step = OpenLoad.runMixed(client, transfers, rate, reads, readRate, run.step(index),
+                            TIMEOUT, MAX_IN_FLIGHT);
                     List<PoolSampler.Sample> poolSamples = pool.stop();
                     LedgerBenchmark.ResourceSampler.Summary resources = sampler.stop();
-                    writeTimeSeries(run, index, rate, step, poolSamples);
+                    writeTimeSeries(run, index, rate, readRate, step, poolSamples);
                     Drain drain = drain(app);
+                    boolean last = index == run.stepCount() - 1;
+                    Drain settle = KAFKA && (last || readRate > 0) ? settle(db, app) : null;
                     boolean alive = app.alive();
                     boolean ledgerOk = ledgerHolds(db);
-                    Map<String, Object> row = row(run, index, rate, step, resources, drain, alive, ledgerOk);
+                    Map<String, Object> row = row(run, index, rate, readRate, step, resources, drain, settle, alive,
+                            ledgerOk);
                     if (!alive) {
                         row.put("exit", app.tail().contains("OutOfMemoryError") ? "out-of-memory" : "exited");
                     }
@@ -255,16 +336,25 @@ class BreakingPointBenchmark {
                     System.out.printf("  %5.0f req/s: %s created/s, p99 %s ms, errors %s, slo %s, ledger %s%n", rate,
                             row.get("createdPerSecond"), row.get("p99Ms"), row.get("errorShare"), row.get("sloPass"),
                             ledgerOk ? "ok" : "BROKEN");
+                    if (readRate > 0) {
+                        System.out.printf("  %5.0f reads/s: %s ok/s, p99 %s ms, errors %s, slo %s%n", readRate,
+                                row.get("readOkPerSecond"), row.get("readP99Ms"), row.get("readErrorShare"),
+                                row.get("readSloPass"));
+                    }
+                    if (settle != null) {
+                        System.out.printf("  settled %s in %s s%n", settle.drained(), settle.seconds());
+                    }
                     if (!ledgerOk) {
                         broken.add(run.cellId() + " rep " + run.repetition() + " at " + rate + " req/s: ledger check");
                     }
-                    if ((long) row.get("client4xx") > 0) {
+                    if ((long) row.get("client4xx") + (long) row.get("read4xx") > 0) {
                         // Every request is valid and every account funded, so a 4xx is a harness bug
                         // that would pass a fast wrong answer off as a fast answer.
                         broken.add(run.cellId() + " rep " + run.repetition() + " at " + rate + " req/s: "
-                                + row.get("client4xx") + " client errors");
+                                + row.get("client4xx") + " write and " + row.get("read4xx") + " read client errors");
                     }
-                    failuresInARow = (boolean) row.get("sloPass") ? 0 : failuresInARow + 1;
+                    boolean pass = (boolean) row.get("sloPass") && (readRate <= 0 || (boolean) row.get("readSloPass"));
+                    failuresInARow = pass ? 0 : failuresInARow + 1;
                     if (!alive || (STOP_AFTER_FAILURES > 0 && failuresInARow >= STOP_AFTER_FAILURES)) {
                         break;
                     }
@@ -277,22 +367,21 @@ class BreakingPointBenchmark {
     }
 
     /**
-     * One JSON line per second of the step: outcomes of the requests scheduled in that second,
-     * next to the pool sample taken closest to it.
+     * One JSON line per second of the step: outcomes of the requests scheduled in that second, per
+     * kind, next to the pool, outbox and consumer sample taken closest to it. Read fields appear
+     * only for a step with reads, outbox and consumer fields only with a broker.
      */
-    private static void writeTimeSeries(Run run, int index, double rate, OpenLoad.Step step,
+    private static void writeTimeSeries(Run run, int index, double rate, double readRate, OpenLoad.Mixed step,
             List<PoolSampler.Sample> samples) throws IOException {
         long cap = TIMEOUT.toNanos();
-        int seconds = (int) Math.ceil(step.scheduled() / rate);
+        int seconds = (int) Math.ceil(run.step(index).toMillis() / 1000.0);
         StringBuilder out = new StringBuilder();
         for (int second = 0; second < seconds; second++) {
-            int from = (int) Math.ceil(second * rate);
-            int to = (int) Math.min(step.scheduled(), Math.ceil((second + 1) * rate));
-            if (from >= to) {
+            int[] writeRange = secondRange(step.writes(), rate, second);
+            int[] readRange = secondRange(step.reads(), readRate, second);
+            if (writeRange == null && readRange == null) {
                 continue;
             }
-            int[] status = Arrays.copyOfRange(step.status(), from, to);
-            long[] latency = Arrays.copyOfRange(step.latencyNanos(), from, to);
             Map<String, Object> r = new LinkedHashMap<>();
             r.put("cell", run.cellId());
             r.put("arm", run.arm());
@@ -300,12 +389,29 @@ class BreakingPointBenchmark {
             r.put("step", index);
             r.put("offeredRps", rate);
             r.put("second", second);
-            r.put("scheduled", to - from);
+            int[] status = writeRange == null ? new int[0]
+                    : Arrays.copyOfRange(step.writes().status(), writeRange[0], writeRange[1]);
+            long[] latency = writeRange == null ? new long[0]
+                    : Arrays.copyOfRange(step.writes().latencyNanos(), writeRange[0], writeRange[1]);
+            r.put("scheduled", status.length);
             r.put("created", Arrays.stream(status).filter(s -> s == 201).count());
             r.put("unavailable503", Arrays.stream(status).filter(s -> s == 503).count());
             r.put("otherServerErrors", Arrays.stream(status).filter(s -> s >= 500 && s != 503).count());
             r.put("timeouts", Arrays.stream(status).filter(s -> s == OpenLoad.TIMEOUT).count());
             r.put("p99Ms", OpenLoad.percentileMs(latency, 99, cap));
+            if (readRate > 0) {
+                int[] readStatus = readRange == null ? new int[0]
+                        : Arrays.copyOfRange(step.reads().status(), readRange[0], readRange[1]);
+                long[] readLatency = readRange == null ? new long[0]
+                        : Arrays.copyOfRange(step.reads().latencyNanos(), readRange[0], readRange[1]);
+                r.put("offeredReadRps", readRate);
+                r.put("readScheduled", readStatus.length);
+                r.put("readOk", Arrays.stream(readStatus).filter(s -> s == 200).count());
+                r.put("read503", Arrays.stream(readStatus).filter(s -> s == 503).count());
+                r.put("readOtherServerErrors", Arrays.stream(readStatus).filter(s -> s >= 500 && s != 503).count());
+                r.put("readTimeouts", Arrays.stream(readStatus).filter(s -> s == OpenLoad.TIMEOUT).count());
+                r.put("readP99Ms", OpenLoad.percentileMs(readLatency, 99, cap));
+            }
             PoolSampler.Sample nearest = null;
             for (PoolSampler.Sample sample : samples) {
                 if (nearest == null || Math.abs(sample.secondsIntoStep() - second)
@@ -317,11 +423,32 @@ class BreakingPointBenchmark {
                 r.put("poolPending", nearest.pending());
                 r.put("poolAcquireMeanMs", nearest.acquireMeanMs());
                 r.put("requestsActive", nearest.active());
+                if (KAFKA) {
+                    r.put("outboxPending", nearest.outboxPending());
+                    r.put("outboxOldestAgeSeconds", nearest.outboxOldestAgeSeconds());
+                    r.put("consumerLag", nearest.consumerLag());
+                }
             }
             out.append(LedgerBenchmark.json(r)).append('\n');
         }
         Files.writeString(OUT.resolve("timeseries.jsonl"), out.toString(), StandardCharsets.UTF_8,
                 StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+    }
+
+    /** Indexes {@code [from, to)} of the requests scheduled in that second, or null when there are none. */
+    private static int[] secondRange(OpenLoad.Step step, double rate, int second) {
+        if (rate <= 0) {
+            return null;
+        }
+        int from = (int) Math.ceil(second * rate);
+        int to = (int) Math.min(step.scheduled(), Math.ceil((second + 1) * rate));
+        return from < to ? new int[] {from, to} : null;
+    }
+
+    /** {@code GET /accounts/{id}} of a random funded account. */
+    private static Supplier<HttpRequest.Builder> reads(AppProcess app, List<String> ids) {
+        return () -> HttpRequest.newBuilder(
+                URI.create(app.baseUrl + "/accounts/" + ids.get(ThreadLocalRandom.current().nextInt(ids.size())))).GET();
     }
 
     /** Transfers as in phase 2 (ADR 0012): the hot account on one side with probability {@code hotShare}. */
@@ -384,6 +511,37 @@ class BreakingPointBenchmark {
     }
 
     /**
+     * Phase 8: waits until no outbox row is pending and every transfer is in the statement (the
+     * reconciliation's "missing from statement" is empty), read straight from the database.
+     * Returns the seconds it took; gives up after 2 minutes or when the application is gone.
+     */
+    private static Drain settle(PostgreSQLContainer db, AppProcess app) throws InterruptedException {
+        Instant start = Instant.now();
+        Instant deadline = start.plus(SETTLE_CAP);
+        boolean settled = false;
+        try (Connection c = DriverManager.getConnection(db.getJdbcUrl(), db.getUsername(), db.getPassword());
+                Statement s = c.createStatement()) {
+            while (app.alive() && Instant.now().isBefore(deadline)) {
+                try (ResultSet rs = s.executeQuery("""
+                        select (select count(*) from outbox_events where published_at is null and parked_at is null)
+                             + (select count(*) from transfers t where not exists
+                                   (select 1 from statement.statement_lines l where l.transfer_id = t.id))
+                        """)) {
+                    rs.next();
+                    if (rs.getLong(1) == 0) {
+                        settled = true;
+                        break;
+                    }
+                }
+                Thread.sleep(500);
+            }
+        } catch (SQLException e) {
+            System.out.println("  settle check failed: " + e.getMessage());
+        }
+        return new Drain(settled, Duration.between(start, Instant.now()).toMillis() / 1000.0);
+    }
+
+    /**
      * {@link AppProcess#metric} reads a missing metric as 0, which would make {@link #drain}
      * return at once; fail the run instead if a drain metric is not there.
      */
@@ -403,9 +561,11 @@ class BreakingPointBenchmark {
         }
     }
 
-    private static Map<String, Object> row(Run run, int index, double rate, OpenLoad.Step step,
-            LedgerBenchmark.ResourceSampler.Summary resources, Drain drain, boolean alive, boolean ledgerOk) {
+    private static Map<String, Object> row(Run run, int index, double rate, double readRate, OpenLoad.Mixed mixed,
+            LedgerBenchmark.ResourceSampler.Summary resources, Drain drain, Drain settle, boolean alive,
+            boolean ledgerOk) {
         long cap = TIMEOUT.toNanos();
+        OpenLoad.Step step = mixed.writes();
         int scheduled = step.scheduled();
         long created = step.count(s -> s == 201);
         long unavailable503 = step.count(s -> s == 503);
@@ -434,12 +594,12 @@ class BreakingPointBenchmark {
         r.put("repetition", run.repetition());
         r.put("step", index);
         r.put("offeredRps", rate);
-        r.put("stepSeconds", run.step().toSeconds());
+        r.put("stepSeconds", run.step(index).toSeconds());
         r.put("seconds", round(step.seconds()));
         r.put("scheduled", scheduled);
         r.put("created", created);
         // Per nominal step length: the wall time also holds the wait for the last timeouts.
-        double nominal = run.step().toMillis() / 1000.0;
+        double nominal = run.step(index).toMillis() / 1000.0;
         r.put("createdPerSecond", round(created / nominal));
         r.put("answeredPerSecond", round(step.count(s -> s > 0) / nominal));
         r.put("client4xx", step.count(s -> s >= 400 && s < 500));
@@ -460,6 +620,29 @@ class BreakingPointBenchmark {
         // A step the server could not drain within 2 minutes, or did not survive, is not within
         // the SLO whatever its percentiles say.
         r.put("sloPass", p99 <= SLO_P99_MS && errorShare <= SLO_ERROR_SHARE && drain.drained() && alive);
+        // Phase 8: the read schedule of the same step, judged by the same SLO on its own.
+        OpenLoad.Step reads = mixed.reads();
+        long readErrors = reads.count(s -> s >= 500 || s < 0);
+        double readErrorShare = reads.scheduled() == 0 ? 0 : (double) readErrors / reads.scheduled();
+        double readP99 = OpenLoad.percentileMs(reads.latencyNanos(), 99, cap);
+        r.put("offeredReadRps", readRate);
+        r.put("read4xx", reads.count(s -> s >= 400 && s < 500));
+        if (readRate > 0) {
+            r.put("readScheduled", reads.scheduled());
+            r.put("readOk", reads.count(s -> s == 200));
+            r.put("readOkPerSecond", round(reads.count(s -> s == 200) / nominal));
+            r.put("read503", reads.count(s -> s == 503));
+            r.put("readOtherServerErrors", reads.count(s -> s >= 500 && s != 503));
+            r.put("readTimeouts", reads.count(s -> s == OpenLoad.TIMEOUT));
+            r.put("readConnectionErrors", reads.count(s -> s == OpenLoad.CONNECTION_ERROR));
+            r.put("readUnsent", reads.count(s -> s == OpenLoad.UNSENT));
+            r.put("readErrorShare", round4(readErrorShare));
+            r.put("readP50Ms", OpenLoad.percentileMs(reads.latencyNanos(), 50, cap));
+            r.put("readP99Ms", readP99);
+            r.put("readMaxMs", OpenLoad.percentileMs(reads.latencyNanos(), 100, cap));
+            r.put("readSloPass", readP99 <= SLO_P99_MS && readErrorShare <= SLO_ERROR_SHARE && drain.drained()
+                    && alive);
+        }
         r.put("ledgerOk", ledgerOk);
         r.put("appAlive", alive);
         r.put("peakPlatformThreads", Math.round(resources.peakPlatformThreads()));
@@ -468,6 +651,9 @@ class BreakingPointBenchmark {
         r.put("meanLoadGeneratorCpu", round(resources.meanLoadGeneratorCpu()));
         r.put("drained", drain.drained());
         r.put("drainSeconds", round(drain.seconds()));
+        // Phase 8: outbox empty and every transfer in the statement; null when not measured.
+        r.put("settled", settle == null ? null : settle.drained());
+        r.put("settleSeconds", settle == null ? null : round(settle.seconds()));
         r.put("startedAt", step.startedAt().toString());
         r.put("finishedAt", Instant.now().toString());
         return r;
@@ -498,6 +684,7 @@ class BreakingPointBenchmark {
         info.put("repetitionOffset", REPETITION_OFFSET);
         info.put("cells", CELLS);
         info.put("arms", String.join(",", ARMS));
+        info.put("kafka", KAFKA);
         info.put("plannedRuns", plannedRuns);
         info.put("seed", SEED);
         info.put("sloP99Ms", SLO_P99_MS);

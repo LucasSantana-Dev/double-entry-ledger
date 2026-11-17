@@ -199,6 +199,15 @@
 					<version>1.4.21</version>
 					<scope>test</scope>
 				</dependency>
+				<!-- JMeter brings commons-io 2.15.1, which would win over the 2.20.0 that Testcontainers'
+				     commons-compress needs to copy files into a container (the Kafka container's start
+				     script, phase 8). -->
+				<dependency>
+					<groupId>commons-io</groupId>
+					<artifactId>commons-io</artifactId>
+					<version>2.20.0</version>
+					<scope>test</scope>
+				</dependency>
 				<!-- The thread-group plugin's common library declares JMeter 2.13, which Maven replaces with
 				     5.6.3 but dependency scanners still report; declared here without it. -->
 				<dependency>

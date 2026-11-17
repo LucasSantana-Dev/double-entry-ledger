@@ -119,6 +119,37 @@ final class OpenLoad {
         return new Step(latency, status, lag, (System.nanoTime() - start) / 1e9, startedAt);
     }
 
+    /** The two schedules of one mixed step (spec {@code docs/specs/2026-11-18-pool-bounds}). */
+    record Mixed(Step writes, Step reads) {
+    }
+
+    /**
+     * Two independent open-model schedules in the same step: {@code writes} at {@code writeRate}
+     * on the calling thread and {@code reads} at {@code readRate} on a platform thread of its own,
+     * so neither schedule waits for the other. A rate of 0 gives an empty step for that kind.
+     */
+    static Mixed runMixed(HttpClient client, Supplier<HttpRequest.Builder> writes, double writeRate,
+            Supplier<HttpRequest.Builder> reads, double readRate, Duration duration, Duration timeout,
+            int maxInFlight) {
+        if (readRate <= 0) {
+            return new Mixed(run(client, writes, writeRate, duration, timeout, maxInFlight), empty());
+        }
+        java.util.concurrent.CompletableFuture<Step> readStep = new java.util.concurrent.CompletableFuture<>();
+        Thread.ofPlatform().name("open-load-reads").start(() -> {
+            try {
+                readStep.complete(run(client, reads, readRate, duration, timeout, maxInFlight));
+            } catch (RuntimeException | Error e) {
+                readStep.completeExceptionally(e);
+            }
+        });
+        Step writeStep = writeRate > 0 ? run(client, writes, writeRate, duration, timeout, maxInFlight) : empty();
+        return new Mixed(writeStep, readStep.join());
+    }
+
+    private static Step empty() {
+        return new Step(new long[0], new int[0], new long[0], 0, java.time.Instant.now());
+    }
+
     /** Parks until the deadline; returns at once when already late, so lateness shows up as latency. */
     private static void sleepUntil(long deadline) {
         long remaining;

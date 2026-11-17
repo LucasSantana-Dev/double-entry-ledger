@@ -40,6 +40,16 @@ final class AppProcess implements AutoCloseable {
     /** Switches the admission filter off; the application turns it on by default (ADR 0033). */
     static final String ADMISSION_OFF = "--ledger.admission.max-concurrent=0";
 
+    /**
+     * Phase 8 (spec {@code docs/specs/2026-11-18-pool-bounds}): points the application at a real
+     * broker, so the relay publishes and the statement consumer runs, and refreshes the outbox
+     * gauges every second instead of every 5 for the per-second samples.
+     */
+    static List<String> kafkaArgs(String bootstrapServers) {
+        return List.of("--spring.kafka.bootstrap-servers=" + bootstrapServers,
+                "--ledger.outbox.metrics.refresh-ms=1000");
+    }
+
     private AppProcess(Process process, Path log, int port) {
         this.process = process;
         this.log = log;
