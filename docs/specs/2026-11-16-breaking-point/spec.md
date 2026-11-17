@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: done
 date: 2026-11-16
 phase: 6
 tags: [benchmark, capacity, slo, open-model, coordinated-omission]

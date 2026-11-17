@@ -150,6 +150,26 @@ The memory came from SerialGC with a heap sized to the container limit, half the
 
 On a $12 a month 2 GB machine (Lightsail, or t4g.small without its $3.65 public IPv4), that is 150 to 155 created transfers per second per dollar a month without a hot account, roughly twice what the 4 GB machines give. The [cost map](costs/2026-11-16-cost-map.md) has the machines, prices and sources, and its limits: the 2 vCPU machine is simulated on a shared x86 runner where PostgreSQL had cores of its own, the candidates are burstable, and the prices are list prices.
 
+## Breaking point
+
+The phase 2 benchmark used a closed model: 256 users, each waiting for its answer before sending again, so the load can never exceed what the service absorbs. The breaking-point run uses an open model instead. Transfers arrive at a fixed rate whether or not earlier ones were answered, latency is measured from each request's scheduled send time so a stalled generator cannot hide queueing (coordinated omission), and the rate climbs in 2 minute steps until the SLO breaks ([ADR 0030](adr/0030-breaking-point-slo-open-model.md)). The SLO: p99 at most 500 ms over every scheduled request, and at most 1% errors (5xx, timeouts at 5 s, connection errors). Conditional-update only, transfers only, 0% and 90% hot ([ADR 0031](adr/0031-breaking-point-scope.md)), with a generator of its own whose stall test is part of the run ([ADR 0032](adr/0032-own-open-model-generator.md)). The ledger checks run after every step. GitHub-hosted 4 vCPU runner, 5 repetitions in shuffled order, a fresh PostgreSQL and application per repetition.
+
+| | 0% hot | 90% hot |
+|---|---|---|
+| capacity (last step within the SLO, median of 5) | at least 1,500 req/s, climbing in 100 req/s steps | 600 req/s [550, 600] |
+| p99 at that step | 35 ms | 320 ms |
+| first step outside the SLO | none up to 1,500 | 650 req/s in 5 of 5 |
+| what a step outside the SLO looks like | 74 to 182 created/s, 87 to 95% errors, heap at its 1 GB limit | p99 at the 5 s timeout, 13 to 91% errors |
+| ledger checks after every step | all passed | all passed |
+
+Runs: [published](benchmarks/2026-11-17-breaking-point/published/results.md) (AMD EPYC 9V45), [calibration](benchmarks/2026-11-17-breaking-point/calibration/results.md) (EPYC 9V74), [jump to 1,500](benchmarks/2026-11-17-breaking-point/jump-to-1500/results.md) (EPYC 7763).
+
+**The rate is not the whole story: the way the service gets there matters.** At 0% hot, 1,500 req/s held in 5 of 5 repetitions when the rate climbed to it in 100 req/s steps (p99 35 ms, a quarter of the CPU). The same 1,500 req/s collapsed in 6 of 6 repetitions when it came as one jump, from 1,000 req/s in the calibration and from the 250 req/s warm-up in a follow-up run, and the service never came back during the step: 74 to 182 created transfers per second against 1,500 offered. At 90% hot, every repetition broke at 650 req/s, and the 3 that went on still held 700 req/s (p99 4 ms) before breaking again at 750. The runners had different CPUs, so the jump comparison is not a clean experiment, but the collapse showed on both CPUs that took the jump.
+
+**Cause.** This is congestion collapse with no admission control, not a lack of CPU (the application used a quarter of the 4 cores). Tomcat accepts up to 8,192 connections, each on its own virtual thread, and every one of them waits up to 30 s for one of 10 database connections while the client gives up at 5 s. Once a burst builds a queue, most of the pool's time goes to requests nobody is waiting for any more, the queue grows faster than it drains, and the heap fills with waiting requests. The application logs show thousands of `Connection is not available, request timed out after 30000ms (total=10, active=10, idle=0, waiting=~8180)`. The closed model of phase 2 never saw this because 256 users cap the queue at 256: it reached 2,042 created/s at 0% hot. Bounding admission (a shorter pool wait, or a concurrency limit that answers 503 at once) is the likely fix and is not part of this phase.
+
+Limits. The generator, the application and PostgreSQL share the runner (generator CPU stayed at 3 to 19% of the machine). The outbox relay holds one of the 10 database connections while it waits for the Kafka broker, which is absent in the benchmark (phase 2 too). The send lag the run records covers the generator's scheduling, not time spent inside the JDK HTTP client before the request leaves. The database grows across the steps of a repetition rather than starting fresh at each step.
+
 ## Design decisions
 
 Each decision has an ADR with the options, the evidence and the consequences.
@@ -179,6 +199,9 @@ Each decision has an ADR with the options, the evidence and the consequences.
 | Memory target | Application, PostgreSQL and Kafka in 2 GB | [0027](adr/0027-memory-target-2-gb.md) |
 | Startup | JVM AOT cache from a training start in the image build | [0028](adr/0028-jvm-aot-cache-for-startup.md) |
 | Throughput per dollar | Conditional-update cells on a simulated 2 vCPU machine | [0029](adr/0029-throughput-per-dollar.md) |
+| Breaking point | SLO p99 500 ms and 1% errors, open model with arrival-rate steps, 4 vCPU runner | [0030](adr/0030-breaking-point-slo-open-model.md) |
+| Breaking-point scope | Conditional-update, transfers only, 0% and 90% hot, 5 repetitions | [0031](adr/0031-breaking-point-scope.md) |
+| Load generator | Own Java open-model generator instead of JMeter, wrk2 or k6 | [0032](adr/0032-own-open-model-generator.md) |
 
 Market evidence behind the stack choices: [126 Brazilian Java job postings](market/2026-11-13-gupy-java-sample.md), reproducible with `tools/market/gupy_java_sample.py`. For phase 3: [100 postings, messaging and resilience keywords](market/2026-11-16-gupy-phase-3-keywords.md), `tools/market/gupy_phase3_keywords.py`. For phase 4: [100 postings, container, cloud, delivery and observability keywords](market/2026-11-16-gupy-phase-4-keywords.md), `tools/market/gupy_phase4_keywords.py` (Docker 50%, Kubernetes 40%, observability or monitoring in any sense 46%, Grafana and tracing 10% each).
 
