@@ -156,9 +156,9 @@ The phase 2 benchmark used a closed model: 256 users, each waiting for its answe
 
 | | 0% hot | 90% hot |
 |---|---|---|
-| capacity (last step within the SLO, median of 5) | at least 1,500 req/s, climbing in 100 req/s steps (the ladder was too short to find the ceiling) | 600 req/s [550, 600] |
+| capacity (last step within the SLO, median of 5) | at least 1,500 req/s on the published run's EPYC 9V45, climbing in 100 req/s steps (the ladder was too short to find the ceiling); 1,200 to 1,300 req/s on slower CPU models (phase 7, below) | 600 req/s [550, 600] |
 | p99 at that step | 35 ms | 320 ms |
-| first step outside the SLO | none up to 1,500 | 600 req/s in 2 of 5, 650 req/s in 3 of 5 |
+| first step outside the SLO | none up to 1,500 on the EPYC 9V45 | 600 req/s in 2 of 5, 650 req/s in 3 of 5 |
 | what a step outside the SLO looks like | 74 to 182 created/s, 87 to 95% errors, heap at its 1 GB limit (runs that jumped to 1,500) | p99 from 1.1 s to the 5 s timeout, 0 to 91% errors |
 | ledger checks after every step, including collapsed steps | all passed | all passed |
 
