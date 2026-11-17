@@ -9,7 +9,7 @@ tags: [tracing, metrics, opentelemetry, grafana, kubernetes, kind, write-up]
 
 ## Goal
 
-Make the ledger's behavior visible and runnable outside the test suite. A transfer shows up as one trace from the HTTP request to the statement line, across the asynchronous outbox relay. The outbox, the conflicts per strategy and the reconciliation show up as metrics on a dashboard. The service runs in Kubernetes, deployed and smoke-tested in CI. As in phases 1 to 3, each claim is backed by a test, not asserted.
+Make the ledger's behavior visible and runnable outside the test suite. A transfer appears as one trace from the HTTP request to the statement line, across the asynchronous outbox relay. The outbox, the conflicts per strategy and the reconciliation appear as metrics on a dashboard. The service runs in Kubernetes, deployed and smoke-tested in CI. As in phases 1 to 3, a test backs each claim.
 
 ## Scope
 
