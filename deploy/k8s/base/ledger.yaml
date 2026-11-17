@@ -89,12 +89,14 @@ spec:
               path: /actuator/health/readiness
               port: http
             periodSeconds: 5
+          # Phase 5 (ADR 0027): application, PostgreSQL and Kafka limits add up to 1,600 Mi, the
+          # same as compose.yaml; the JVM settings are the image defaults (Dockerfile).
           resources:
             requests:
               cpu: 250m
               memory: 512Mi
             limits:
-              memory: 1Gi
+              memory: 768Mi
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true

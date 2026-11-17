@@ -20,6 +20,11 @@ services:
       MANAGEMENT_TRACING_EXPORT_OTLP_ENABLED: "true"
       MANAGEMENT_OTLP_METRICS_EXPORT_ENABLED: "true"
       MANAGEMENT_TRACING_SAMPLING_PROBABILITY: "1.0"
+    # Phase 5 (ADR 0027): application, PostgreSQL and Kafka limits add up to 1,600 MiB (target 2 GB). Swap
+    # is off (memswap_limit equal to mem_limit), so going over the limit is an OOM kill, not a
+    # slow container. The JVM settings are the image defaults (Dockerfile).
+    mem_limit: 768m
+    memswap_limit: 768m
     depends_on:
       postgres:
         condition: service_healthy
@@ -35,6 +40,11 @@ services:
       POSTGRES_DB: ledger
       POSTGRES_USER: ledger
       POSTGRES_PASSWORD: ledger-demo-password
+    # Phase 5 (ADR 0027): the application pool holds 10 connections, so 30 leave room for
+    # psql and the smoke test; shared_buffers below the 128 MB default.
+    command: ["postgres", "-c", "shared_buffers=64MB", "-c", "max_connections=30"]
+    mem_limit: 256m
+    memswap_limit: 256m
     volumes:
       - postgres-data:/var/lib/postgresql
     healthcheck:
@@ -59,7 +69,12 @@ services:
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
       KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
-      KAFKA_HEAP_OPTS: -Xms512m -Xmx512m
+      # Phase 5 (ADR 0027): one broker with a few topics and little traffic. 256 MB is the
+      # smallest heap tried that starts: with 192 MB the log manager failed with
+      # OutOfMemoryError at startup (docs/footprint).
+      KAFKA_HEAP_OPTS: -Xms256m -Xmx256m
+    mem_limit: 576m
+    memswap_limit: 576m
     healthcheck:
       test: ["CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 > /dev/null"]
       interval: 10s

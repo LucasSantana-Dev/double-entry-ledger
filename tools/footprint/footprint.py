@@ -362,7 +362,8 @@ def main():
     base = f"http://localhost:{args.port}"
     started_at = datetime.datetime.now(datetime.timezone.utc)
     result = {"label": args.label, "startedAt": started_at.isoformat(timespec="seconds"), "args": sys.argv[1:],
-              "commit": run(["git", "rev-parse", "--short", "HEAD"]).stdout.strip()}
+              "commit": run(["git", "rev-parse", "--short", "HEAD"]).stdout.strip()
+              + ("-dirty" if run(["git", "status", "--porcelain", "--untracked-files=no"]).stdout.strip() else "")}
     info = json.loads(run(["docker", "info", "--format", "{{json .}}"]).stdout)
     result["host"] = {"os": info.get("OperatingSystem"), "kernel": info.get("KernelVersion"), "docker": info.get("ServerVersion"),
                       "cpus": info.get("NCPU"), "memGiB": round(info.get("MemTotal", 0) / 2**30, 1)}

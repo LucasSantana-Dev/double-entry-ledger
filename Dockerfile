@@ -24,5 +24,9 @@ COPY --from=build /build/extracted/snapshot-dependencies/ ./
 COPY --from=build /build/extracted/application/ ./
 USER 10001:10001
 EXPOSE 8080
-ENV JAVA_TOOL_OPTIONS="-XX:MaxRAMPercentage=75"
+# Phase 5 (ADR 0027), measured with tools/footprint: SerialGC (what the JVM picks on its own
+# under 1,792 MB, written down; same peak memory as G1 and about 8% less CPU for the same load),
+# 60% of the container limit for the heap, and metaspace capped well above the 116 MB the
+# application uses, so the rest of the limit is left for metaspace, code cache and threads.
+ENV JAVA_TOOL_OPTIONS="-XX:+UseSerialGC -XX:MaxRAMPercentage=60 -XX:MaxMetaspaceSize=192m"
 ENTRYPOINT ["java", "-jar", "application.jar"]
